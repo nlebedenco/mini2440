@@ -282,8 +282,8 @@ Index: psplash/psplash.h
 +#define PSPLASH_TEXT_COLOR_G    0xff
 +#define PSPLASH_TEXT_COLOR_B    0xff
 +
-+#define PSPLASH_PROGRESS_DIVIDER    3
-+#define PSPLASH_TEXT_DIVIDER    3
++#define PSPLASH_PROGRESS_DIVIDER    6
++#define PSPLASH_TEXT_DIVIDER    6
 +
  #define PSPLASH_FIFO "psplash_fifo"
  
