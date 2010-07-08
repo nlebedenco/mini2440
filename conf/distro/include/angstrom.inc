@@ -31,7 +31,7 @@ require conf/distro/include/angstrom-${ANGSTROMLIBC}.inc
 
 # We can't do ARM_INSTRUCTION_SET_armv4t since that will un-overridable in recipes like gcc
 ANGSTROM_ARM_INSTRUCTION_SET ?= "arm"
-ANGSTROM_ARM_INSTRUCTION_SET_armv4t = "thumb"
+ANGSTROM_ARM_INSTRUCTION_SET_armv4t = "arm"
 ANGSTROM_ARM_INSTRUCTION_SET_armv5te = "thumb"
 ANGSTROM_ARM_INSTRUCTION_SET_armv5teb = "thumb"
 
