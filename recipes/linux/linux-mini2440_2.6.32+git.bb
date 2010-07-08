@@ -8,7 +8,14 @@ GGSRC = "http://www.xora.org.uk/oe/patches/"
 SRCREV = "${AUTOREV}"
 
 SRC_URI = "git://repo.or.cz/linux-2.6/mini2440.git;protocol=git;branch=mini2440-stable-v2.6.32 \
-           file://defconfig-mini2440"
+        file://01-fix_nand_bbt_detection.patch;patch=1 \
+        file://02-fix_s3c2410_gpio_pullup_calls.patch;patch=1 \
+        file://03-fix_drivers_gpio_direction.patch;patch=1 \
+        file://04-gpj_support.patch;patch=1 \
+        file://05-gpio_keys_as_optional_feature.patch;patch=1 \
+        file://06-spi0_as_optional_feature.patch;patch=1 \
+        file://07-disable_uneeded_pullups.patch;patch=1 \
+        file://defconfig-mini2440"
 
 S = "${WORKDIR}/git"
 

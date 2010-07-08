@@ -1,0 +1,180 @@
+--- linux-2.6.32/arch/arm/plat-s3c24xx/Kconfig	2010-05-04 03:28:43.000000000 -0300
++++ linux-2.6.32/arch/arm/plat-s3c24xx/Kconfig	2010-06-26 01:52:27.000000000 -0300
+@@ -6,7 +6,7 @@
+
+ config PLAT_S3C24XX
+	bool
+-	depends on ARCH_S3C2410 || ARCH_S3C24A0
++	depends on ARCH_S3C2410 || ARCH_S3C2440
+	default y
+	select NO_IOPORT
+	select ARCH_REQUIRE_GPIOLIB
+@@ -129,19 +129,19 @@
+ # SPI default pin configuration code
+
+ config S3C24XX_SPI_BUS0_GPE11_GPE12_GPE13
+-	bool
++	bool "SPI BUS0 GPIO configuration code"
+	help
+	  SPI GPIO configuration code for BUS0 when connected to
+	  GPE11, GPE12 and GPE13.
+
+ config S3C24XX_SPI_BUS1_GPG5_GPG6_GPG7
+-	bool
++	bool "SPI BUS1 GPIO configuration code"
+	help
+	  SPI GPIO configuration code for BUS 1 when connected to
+	  GPG5, GPG6 and GPG7.
+
+ config S3C24XX_SPI_BUS1_GPD8_GPD9_GPD10
+-	bool
++	bool "SPI BUS1 alternative GPIO configuration code"
+	help
+	  SPI GPIO configuration code for BUS 1 when connected to
+	  GPD8, GPD9 and GPD10.
+--- linux-2.6.32/arch/arm/mach-s3c2440/mach-mini2440.c	2010-07-02 15:02:12.000000000 -0300
++++ linux-2.6.32/arch/arm/mach-s3c2440/mach-mini2440.c	2010-07-02 15:31:39.000000000 -0300
+@@ -29,6 +29,7 @@
+ #include <linux/gpio_keys.h>
+ #include <linux/i2c.h>
+ #include <linux/mmc/host.h>
++#include <linux/spi/spi.h>
+
+ #include <asm/mach/arch.h>
+ #include <asm/mach/map.h>
+@@ -43,6 +44,7 @@
+ #include <mach/regs-mem.h>
+ #include <mach/regs-lcd.h>
+ #include <mach/irqs.h>
++#include <mach/spi.h>
+ #include <plat/nand.h>
+ #include <plat/iic.h>
+ #include <plat/mci.h>
+@@ -111,6 +113,62 @@
+	},
+ };
+
++/*
++ * SPI
++ */
++
++/* Chip-selects */
++static int mini2440_spi_cs[] = {
++	S3C2410_GPF(4),        // CS1
++	S3C2410_GPF(5),        // CS2
++	S3C2410_GPH(9),        // CS3
++	S3C2410_GPH(10),       // CS4
++};
++
++/* Spi devices (one for each chip-select/bus combination) */
++static struct spi_board_info __initdata mini2440_spi_board_info[] = {
++        [0] = {
++                .modalias       = "spidev",
++                .max_speed_hz   = 4000000, // 4 MHz
++                .bus_num        = 0,
++                .chip_select    = 0,
++                .mode           = SPI_MODE_1,
++        },
++        [1] = {
++                .modalias       = "spidev",
++                .max_speed_hz   = 4000000, // 4 MHz
++                .bus_num        = 0,
++                .chip_select    = 1,
++                .mode           = SPI_MODE_1,
++        },
++        [2] = {
++                .modalias       = "spidev",
++                .max_speed_hz   = 4000000, // 4 MHz
++                .bus_num        = 0,
++                .chip_select    = 2,
++                .mode           = SPI_MODE_1,
++        },
++        [3] = {
++                .modalias       = "spidev",
++                .max_speed_hz   = 4000000, // 4 MHz
++                .bus_num        = 0,
++                .chip_select    = 3,
++                .mode           = SPI_MODE_1,
++        }
++};
++
++static void mini2440_spi0_cs(struct s3c2410_spi_info *spi, int cs, int pol)
++{
++    s3c2410_gpio_setpin(mini2440_spi_cs[cs], pol);
++}
++
++static struct s3c2410_spi_info mini2440_spi0_platdata = {
++    .num_cs = 4,
++    .bus_num = 0,
++    .gpio_setup = s3c24xx_spi_gpiocfg_bus0_gpe11_12_13,
++    .set_cs = mini2440_spi0_cs,
++};
++
+ /* USB device UDC support */
+
+ static void mini2440_udc_pullup(enum s3c2410_udc_cmd_e cmd)
+@@ -641,6 +699,22 @@
+	s3c_device_sdi.dev.platform_data = &mini2440_mmc_cfg;
+ }
+
++static void __init mini2440_spi_setup(void)
++{
++	int i;
++	/* setup SPI0 pins */
++	for (i = 0; i < ARRAY_SIZE(mini2440_spi_cs); i++) {
++		s3c2410_gpio_pullup(mini2440_spi_cs[i], 1);
++		s3c2410_gpio_setpin(mini2440_spi_cs[i],
++					((mini2440_spi_board_info[i].mode & SPI_CS_HIGH) ^ SPI_CS_HIGH));
++		s3c2410_gpio_cfgpin(mini2440_spi_cs[i],
++					S3C2410_GPIO_OUTPUT);
++	}
++	s3c_device_spi0.dev.platform_data = &mini2440_spi0_platdata;
++	printk(KERN_INFO "MINI2440: spi0 enabled\n");
++	spi_register_board_info(mini2440_spi_board_info, ARRAY_SIZE(mini2440_spi_board_info));
++}
++
+ static void __init mini2440_gpio_keys_setup(void)
+ {
+	int i;
+@@ -660,6 +734,7 @@
+  * c = camera [TODO]
+  * 0-9 LCD configuration
+  * k = GPIO Button Keys
++ * s = Spi-0
+  *
+  */
+ static char mini2440_features_str[12] __initdata = "0tb";
+@@ -678,6 +753,7 @@
+ #define FEATURE_TOUCH (1 << 2)
+ #define FEATURE_CAMERA (1 << 3)
+ #define FEATURE_GPIO_KEYS (1 << 4)
++#define FEATURE_SPI0 (1 << 5)
+
+ struct mini2440_features_t {
+	int count;
+@@ -750,6 +826,15 @@
+					&s3c_device_camif;
+			features->done |= FEATURE_CAMERA;
+			break;
++		case 's':
++			if (features->done & FEATURE_SPI0)
++				printk(KERN_INFO "MINI2440: '%c' ignored, "
++					"spi0 already registered\n", f);
++			else
++				features->optional[features->count++] =
++					&s3c_device_spi0;
++			features->done |= FEATURE_SPI0;
++			break;
+		case 'k':
+			if (features->done & FEATURE_GPIO_KEYS)
+				printk(KERN_INFO "MINI2440: '%c' ignored, "
+@@ -821,6 +906,9 @@
+     if (features.done & FEATURE_GPIO_KEYS)
+         mini2440_gpio_keys_setup();
+
++    if (features.done & FEATURE_SPI0)
++        mini2440_spi_setup();
++
+	platform_add_devices(mini2440_devices, ARRAY_SIZE(mini2440_devices));
+
+	if (features.count)	/* the optional features */

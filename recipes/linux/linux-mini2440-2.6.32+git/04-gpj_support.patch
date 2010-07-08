@@ -1,0 +1,254 @@
+--- linux-2.6.32/arch/arm/mach-s3c2410/include/mach/gpio.h	2010-05-04 03:28:43.000000000 -0300
++++ linux-2.6.32/arch/arm/mach-s3c2410/include/mach/gpio.h	2010-06-28 23:54:45.000000000 -0300
+@@ -26,4 +26,9 @@
+ #include <mach/gpio-nrs.h>
+ #include <mach/gpio-fns.h>
+
++#if defined(CONFIG_CPU_S3C2440)
++#define S3C_GPIO_END	(S3C2440_GPIO_BANKJ + 32)
++#else
+ #define S3C_GPIO_END	(S3C2410_GPIO_BANKH + 32)
++#endif
++
+--- linux-2.6.32/arch/arm/plat-s3c24xx/Kconfig	2010-05-04 03:28:43.000000000 -0300
++++ linux-2.6.32/arch/arm/plat-s3c24xx/Kconfig	2010-06-28 19:00:02.000000000 -0300
+@@ -81,6 +81,7 @@
+
+ config S3C24XX_GPIO_EXTRA
+	int
++	default 192 if S3C24XX_GPIO_EXTRA192
+	default 128 if S3C24XX_GPIO_EXTRA128
+	default 64 if S3C24XX_GPIO_EXTRA64
+	default 0
+@@ -97,6 +98,14 @@
+	  Add an extra 128 gpio numbers to the available GPIO pool. This is
+	  available for boards that need extra gpios for external devices.
+
++config S3C24XX_GPIO_EXTRA192
++	bool
++	default y if CPU_S3C2440
++	help
++	  Add an extra 192 gpio numbers to the available GPIO pool. This is
++	  available for boards that need extra gpios for external devices.
++	  Needed by S3C2440 based boards to access GPJ io register
++
+ config PM_SIMTEC
+	bool
+	help
+--- linux-2.6.32/arch/arm/mach-s3c2410/include/mach/gpio-nrs.h	2010-06-26 21:12:30.000000000 -0300
++++ linux-2.6.32/arch/arm/mach-s3c2410/include/mach/gpio-nrs.h	2010-06-26 21:13:02.000000000 -0300
+@@ -14,7 +14,7 @@
+ #ifndef __MACH_GPIONRS_H
+ #define __MACH_GPIONRS_H
+
+-#define S3C2410_GPIONO(bank,offset) ((bank) + (offset))
++
+
+ #define S3C2410_GPIO_BANKA   (32*0)
+ #define S3C2410_GPIO_BANKB   (32*1)
+@@ -24,6 +24,8 @@
+ #define S3C2410_GPIO_BANKF   (32*5)
+ #define S3C2410_GPIO_BANKG   (32*6)
+ #define S3C2410_GPIO_BANKH   (32*7)
++#define S3C2440_GPIO_BANKJ   (32*13)
++
+
+ /* GPIO bank sizes */
+ #define S3C2410_GPIO_A_NR	(32)
+@@ -35,6 +37,13 @@
+ #define S3C2410_GPIO_G_NR	(32)
+ #define S3C2410_GPIO_H_NR	(32)
+
++#define S3C2440_GPIO_RESERVED1_NR	(32)
++#define S3C2440_GPIO_RESERVED2_NR	(32)
++#define S3C2440_GPIO_RESERVED3_NR	(32)
++#define S3C2440_GPIO_RESERVED4_NR	(32)
++#define S3C2440_GPIO_RESERVED5_NR	(32)
++#define S3C2440_GPIO_J_NR	(32)
++
+ #if CONFIG_S3C_GPIO_SPACE != 0
+ #error CONFIG_S3C_GPIO_SPACE cannot be zero at the moment
+ #endif
+@@ -53,6 +62,13 @@
+	S3C2410_GPIO_F_START = S3C2410_GPIO_NEXT(S3C2410_GPIO_E),
+	S3C2410_GPIO_G_START = S3C2410_GPIO_NEXT(S3C2410_GPIO_F),
+	S3C2410_GPIO_H_START = S3C2410_GPIO_NEXT(S3C2410_GPIO_G),
++
++	S3C2440_GPIO_RESERVED1_START = S3C2410_GPIO_NEXT(S3C2410_GPIO_H),
++	S3C2440_GPIO_RESERVED2_START = S3C2410_GPIO_NEXT(S3C2440_GPIO_RESERVED1),
++	S3C2440_GPIO_RESERVED3_START = S3C2410_GPIO_NEXT(S3C2440_GPIO_RESERVED2),
++	S3C2440_GPIO_RESERVED4_START = S3C2410_GPIO_NEXT(S3C2440_GPIO_RESERVED3),
++	S3C2440_GPIO_RESERVED5_START = S3C2410_GPIO_NEXT(S3C2440_GPIO_RESERVED4),
++	S3C2440_GPIO_J_START = S3C2410_GPIO_NEXT(S3C2440_GPIO_RESERVED5),
+ };
+
+ #endif /* __ASSEMBLY__ */
+@@ -67,6 +83,8 @@
+ #define S3C2410_GPF(_nr)	(S3C2410_GPIO_F_START + (_nr))
+ #define S3C2410_GPG(_nr)	(S3C2410_GPIO_G_START + (_nr))
+ #define S3C2410_GPH(_nr)	(S3C2410_GPIO_H_START + (_nr))
++#define S3C2440_GPJ(_nr)	(S3C2440_GPIO_J_START + (_nr))
++
+
+ /* compatibility until drivers can be modified */
+
+@@ -89,5 +107,19 @@
+
+ #define S3C2410_GPH10	S3C2410_GPH(10)
+
++#define S3C2440_GPJ0	S3C2440_GPJ(0)
++#define S3C2440_GPJ1	S3C2440_GPJ(1)
++#define S3C2440_GPJ2	S3C2440_GPJ(2)
++#define S3C2440_GPJ3	S3C2440_GPJ(3)
++#define S3C2440_GPJ4	S3C2440_GPJ(4)
++#define S3C2440_GPJ5	S3C2440_GPJ(5)
++#define S3C2440_GPJ6	S3C2440_GPJ(6)
++#define S3C2440_GPJ7	S3C2440_GPJ(7)
++#define S3C2440_GPJ8	S3C2440_GPJ(8)
++#define S3C2440_GPJ9	S3C2440_GPJ(9)
++#define S3C2440_GPJ10	S3C2440_GPJ(10)
++#define S3C2440_GPJ11	S3C2440_GPJ(11)
++#define S3C2440_GPJ12	S3C2440_GPJ(12)
++
+ #endif /* __MACH_GPIONRS_H */
+
+
+--- linux-2.6.32/arch/arm/mach-s3c2410/include/mach/regs-gpioj.h	2010-06-26 21:13:10.000000000 -0300
++++ linux-2.6.32/arch/arm/mach-s3c2410/include/mach/regs-gpioj.h	2010-06-26 21:13:21.000000000 -0300
+@@ -14,6 +14,12 @@
+ #ifndef __ASM_ARCH_REGS_GPIOJ_H
+ #define __ASM_ARCH_REGS_GPIOJ_H "gpioj"
+
++/* These definitions were moved to regs-gpio.h and gpio-nrs.h using the same semantics of the other ports.
++   There's no need to include this file anymore.
++ */
++#warning regs-gpioj.h: this file is obsolete. Use regs-gpio.h only.
++#if 0
++
+ /* Port J consists of 13 GPIO/Camera pins
+  *
+  * GPJCON has 2 bits for each of the input pins on port F
+@@ -102,5 +108,7 @@
+ #define S3C2443_GPJ14		S3C2410_GPIONO(S3C2440_GPIO_BANKJ, 14)
+ #define S3C2443_GPJ15		S3C2410_GPIONO(S3C2440_GPIO_BANKJ, 15)
+
++#endif
++
+ #endif	/* __ASM_ARCH_REGS_GPIOJ_H */
+
+--- linux-2.6.32/arch/arm/mach-s3c2410/include/mach/regs-gpio.h	2010-06-26 21:13:33.000000000 -0300
++++ linux-2.6.32/arch/arm/mach-s3c2410/include/mach/regs-gpio.h	2010-06-26 21:13:51.000000000 -0300
+@@ -509,9 +509,9 @@
+ #define S3C2410_GPF_PUPDIS(x)  (1<<(x))
+
+ /* S3C2410:
+- * Port G consists of 8 GPIO/IRQ/Special function
++ * Port G consists of 16 GPIO/IRQ/Special function
+  *
+- * GPGCON has 2 bits for each of the input pins on port F
++ * GPGCON has 2 bits for each of the input pins on port G
+  *   00 = 0 input, 1 output, 2 interrupt (EINT0..7), 3 special func
+  *
+  * pull up works like all other ports.
+@@ -597,10 +597,10 @@
+
+ #define S3C2410_GPG_PUPDIS(x)  (1<<(x))
+
+-/* Port H consists of11 GPIO/serial/Misc pins
++/* Port H consists of 11 GPIO/serial/Misc pins
+  *
+- * GPGCON has 2 bits for each of the input pins on port F
+- *   00 = 0 input, 1 output, 2 interrupt (EINT0..7), 3 special func
++ * GPHCON has 2 bits for each of the input pins on port H
++ *   00 = 0 input, 1 output, 2 special function, 3 alternative function
+  *
+  * pull up works like all other ports.
+ */
+@@ -634,11 +634,56 @@
+
+ #define S3C2410_GPH10_CLKOUT1 (0x02 << 20)
+
++/* Port J consists of 13 GPIO/Misc pins
++ *
++ * GPJCON has 2 bits for each of the input pins on port J
++ *   00 = 0 input, 1 output, 2 camera functions, 3 reserved
++ *
++ * pull up works like all other ports.
++*/
++
++#define S3C2440_GPJCON	   S3C2410_GPIOREG(0xD0)
++#define S3C2440_GPJDAT	   S3C2410_GPIOREG(0xD4)
++#define S3C2440_GPJUP	   S3C2410_GPIOREG(0xD8)
++
++#define S3C2440_GPJ0_CAMDATA0  (0x02 << 0)
++
++#define S3C2440_GPJ1_CAMDATA1  (0x02 << 2)
++
++#define S3C2440_GPJ2_CAMDATA2  (0x02 << 4)
++
++#define S3C2440_GPJ3_CAMDATA3  (0x02 << 6)
++
++#define S3C2440_GPJ4_CAMDATA4  (0x02 << 8)
++
++#define S3C2440_GPJ5_CAMDATA5  (0x02 << 10)
++
++#define S3C2440_GPJ6_CAMDATA6  (0x02 << 12)
++
++#define S3C2440_GPJ7_CAMDATA7  (0x02 << 14)
++
++#define S3C2440_GPJ8_CAMPCLK   (0x02 << 16)
++
++#define S3C2440_GPJ9_CAMVSYNC  (0x02 << 18)
++
++#define S3C2440_GPJ10_CAMHREF  (0x02 << 20)
++
++#define S3C2440_GPJ11_CAMCLKOUT (0x02 << 22)
++
++#define S3C2440_GPJ12_CAMRST    (0x02 << 24)
++
++
+ /* The S3C2412 and S3C2413 move the GPJ register set to after
+  * GPH, which means all registers after 0x80 are now offset by 0x10
+  * for the 2412/2413 from the 2410/2440/2442
+ */
+
++#define S3C2413_GPJCON		S3C2410_GPIOREG(0x80)
++#define S3C2413_GPJDAT		S3C2410_GPIOREG(0x84)
++#define S3C2413_GPJUP		S3C2410_GPIOREG(0x88)
++#define S3C2413_GPJSLPCON	S3C2410_GPIOREG(0x8C)
++
++
+ /* miscellaneous control */
+ #define S3C2400_MISCCR	   S3C2410_GPIOREG(0x54)
+ #define S3C2410_MISCCR	   S3C2410_GPIOREG(0x80)
+--- linux-2.6.32/arch/arm/plat-s3c24xx/gpiolib.c	2010-06-26 21:11:49.000000000 -0300
++++ linux-2.6.32/arch/arm/plat-s3c24xx/gpiolib.c	2010-06-26 21:12:06.000000000 -0300
+@@ -151,7 +151,8 @@
+			.ngpio			= 16,
+			.to_irq			= s3c24xx_gpiolib_bankg_toirq,
+		},
+-	}, {
++	},
++	[7] = {
+		.base	= S3C2410_GPHCON,
+		.pm	= __gpio_pm(&s3c_gpio_pm_2bit),
+		.chip	= {
+@@ -161,6 +162,18 @@
+			.ngpio			= 11,
+		},
+	},
++#if defined(CONFIG_CPU_S3C2440) && (CONFIG_S3C24XX_GPIO_EXTRA >= 192)
++	[8] = {
++		.base	= S3C2440_GPJCON,
++		.pm	= __gpio_pm(&s3c_gpio_pm_2bit),
++		.chip	= {
++			.base			= S3C2440_GPJ(0),
++			.owner			= THIS_MODULE,
++			.label			= "GPIOJ",
++			.ngpio			= 13,
++		},
++	},
++#endif
+ };
+
+ static __init int s3c24xx_gpiolib_init(void)

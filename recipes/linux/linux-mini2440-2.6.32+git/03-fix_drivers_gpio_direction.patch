@@ -1,0 +1,188 @@
+--- linux-2.6.32/include/linux/gpio.h	2010-06-29 00:14:49.000000000 -0300
++++ linux-2.6.32/include/linux/gpio.h	2010-06-29 00:14:57.000000000 -0300
+@@ -84,6 +84,13 @@
+	WARN_ON(1);
+ }
+
++static inline int gpio_get_direction_cansleep(unsigned gpio)
++{
++	/* GPIO can never have been requested or set as {in,out}put */
++	WARN_ON(1);
++	return 0;
++}
++
+ static inline int gpio_export(unsigned gpio, bool direction_may_change)
+ {
+	/* GPIO can never have been requested or set as {in,out}put */
+--- linux-2.6.32/include/asm-generic/gpio.h	2010-05-04 03:29:54.000000000 -0300
++++ linux-2.6.32/include/asm-generic/gpio.h	2010-06-28 23:24:00.000000000 -0300
+@@ -61,6 +61,8 @@
+  *      may be NULL if there is no alias for the GPIO, however the
+  *      array must be @ngpio entries long.
+  *
++ * @get_direction: optional routine returns direction for signal "offset"
++ * 	0: for input; 1: for output; > 1: other functions (multiplexed peripherals ?)
+  * A gpio_chip can help platforms abstract various sources of GPIOs so
+  * they can all be accessed through a common programing interface.
+  * Example sources would be SOC controllers, FPGAs, multifunction
+@@ -90,6 +92,9 @@
+	void			(*set)(struct gpio_chip *chip,
+						unsigned offset, int value);
+
++	int			(*get_direction)(struct gpio_chip *chip,
++						unsigned offset);
++
+	int			(*to_irq)(struct gpio_chip *chip,
+						unsigned offset);
+
+@@ -120,6 +125,8 @@
+ extern int gpio_direction_input(unsigned gpio);
+ extern int gpio_direction_output(unsigned gpio, int value);
+
++extern int gpio_get_direction_cansleep(unsigned gpio);
++
+ extern int gpio_get_value_cansleep(unsigned gpio);
+ extern void gpio_set_value_cansleep(unsigned gpio, int value);
+
+--- linux-2.6.32/arch/arm/plat-s3c/gpio.c	2010-05-04 03:28:43.000000000 -0300
++++ linux-2.6.32/arch/arm/plat-s3c/gpio.c	2010-06-28 22:33:34.000000000 -0300
+@@ -122,6 +122,18 @@
+	return val;
+ }
+
++static int s3c_gpiolib_get_direction(struct gpio_chip *chip, unsigned offset)
++{
++	struct s3c_gpio_chip *ourchip = to_s3c_gpio(chip);
++	unsigned long val;
++
++	val = __raw_readl(ourchip->base + 0x00);
++	val >>= (offset * 2);
++	val &= 3;
++
++	return val;
++}
++
+ __init void s3c_gpiolib_add(struct s3c_gpio_chip *chip)
+ {
+	struct gpio_chip *gc = &chip->chip;
+@@ -139,6 +151,8 @@
+		gc->set = s3c_gpiolib_set;
+	if (!gc->get)
+		gc->get = s3c_gpiolib_get;
++	if (!gc->get_direction)
++		gc->get_direction = s3c_gpiolib_get_direction;
+
+ #ifdef CONFIG_PM
+	if (chip->pm != NULL) {
+--- linux-2.6.32/drivers/gpio/gpiolib.c	2010-06-28 17:37:25.000000000 -0300
++++ linux-2.6.32/drivers/gpio/gpiolib.c	2010-06-29 22:52:17.000000000 -0300
+@@ -216,17 +216,19 @@
+		struct device_attribute *attr, char *buf)
+ {
+	const struct gpio_desc	*desc = dev_get_drvdata(dev);
++	unsigned		gpio = desc - gpio_desc;
+	ssize_t			status;
+
+	mutex_lock(&sysfs_lock);
+
+	if (!test_bit(FLAG_EXPORT, &desc->flags))
+		status = -EIO;
+-	else
++	else {
++		int is_out = gpio_get_direction_cansleep(gpio);
+		status = sprintf(buf, "%s\n",
+-			test_bit(FLAG_IS_OUT, &desc->flags)
+-				? "out" : "in");
+-
++			(is_out > 1) ? "func" : (is_out
++				? "out" : "in"));
++    }
+	mutex_unlock(&sysfs_lock);
+	return status;
+ }
+@@ -287,7 +289,7 @@
+
+	if (!test_bit(FLAG_EXPORT, &desc->flags))
+		status = -EIO;
+-	else if (!test_bit(FLAG_IS_OUT, &desc->flags))
++	else if (gpio_get_direction_cansleep(gpio) != 1) // anything other than output
+		status = -EPERM;
+	else {
+		long		value;
+@@ -671,8 +673,7 @@
+
+			if (!status && gpio_to_irq(gpio) >= 0
+					&& (direction_may_change
+-						|| !test_bit(FLAG_IS_OUT,
+-							&desc->flags)))
++						|| !gpio_get_direction_cansleep(gpio)))
+				status = device_create_file(dev,
+						&dev_attr_edge);
+
+@@ -919,6 +920,8 @@
+	unsigned	id;
+	int		base = chip->base;
+
++    printk(KERN_DEBUG "gpiolib.c: trying to add %s base: %X ngpio: %d", chip->label, chip->base, chip->ngpio);
++
+	if ((!gpio_is_valid(base) || !gpio_is_valid(base + chip->ngpio - 1))
+			&& base >= 0) {
+		status = -EINVAL;
+@@ -953,9 +956,25 @@
+			 * gpio direction first thing; but until it does,
+			 * we may expose the wrong direction in sysfs.
+			 */
+-			gpio_desc[id].flags = !chip->direction_input
+-				? (1 << FLAG_IS_OUT)
+-				: 0;
++			 /* REVISITED: I suppose in some cases, when using
++			  * external GPIO devices such as FPGAs or Serial
++			  * IO expanders one may  prefer to cache the IO
++			  * direction using a flag, at the cost of
++			  * possibly showing a wrong setting until this
++			  * same IO is configured in userspace
++			  * But the platform could provide an optional callback
++			  * to check on direction if either guessing or late
++			  * configuration are considered bad options. This
++			  * callback is evaluated in gpio_get_direction_cansleep(...)
++			  */
++			if (!chip->get_direction)
++				gpio_desc[id].flags = !chip->direction_input
++					? (1 << FLAG_IS_OUT)
++					: 0;
++			else
++				gpio_desc[id].flags = (gpio_get_direction_cansleep(id) == 1)
++					? (1 << FLAG_IS_OUT)
++					: 0;
+		}
+	}
+
+@@ -1372,6 +1391,15 @@
+ }
+ EXPORT_SYMBOL_GPL(gpio_set_value_cansleep);
+
++int gpio_get_direction_cansleep(unsigned gpio)
++{
++	struct gpio_chip	*chip;
++
++	might_sleep_if(extra_checks);
++	chip = gpio_to_chip(gpio);
++	return chip->get_direction ? chip->get_direction(chip, gpio - chip->base) : test_bit(FLAG_IS_OUT, &gpio_desc[gpio].flags);
++}
++EXPORT_SYMBOL_GPL(gpio_get_direction_cansleep);
+
+ #ifdef CONFIG_DEBUG_FS
+
+@@ -1386,10 +1414,10 @@
+		if (!test_bit(FLAG_REQUESTED, &gdesc->flags))
+			continue;
+
+-		is_out = test_bit(FLAG_IS_OUT, &gdesc->flags);
++		is_out = gpio_get_direction_cansleep(gpio);
+		seq_printf(s, " gpio-%-3d (%-20.20s) %s %s",
+			gpio, gdesc->label,
+-			is_out ? "out" : "in ",
++			(is_out > 1)? "func" : (is_out ? "out" : "in "),
+			chip->get
+				? (chip->get(chip, i) ? "hi" : "lo")
+				: "?  ");

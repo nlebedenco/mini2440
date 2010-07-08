@@ -1,0 +1,73 @@
+--- linux-2.6.32/arch/arm/mach-s3c2440/mach-mini2440.c	2010-07-02 15:31:39.000000000 -0300
++++ linux-2.6.32/arch/arm/mach-s3c2440/mach-mini2440.c	2010-07-02 15:29:07.000000000 -0300
+@@ -487,6 +487,36 @@
+	},
+ };
+
++/* The following gpios have external pullups attached
++ * so there's no need to keep the internal (weak) ones
++ */
++static int mini2440_disabled_pullups[] = {
++    S3C2410_GPF(0),
++    S3C2410_GPF(1),
++    S3C2410_GPF(2),
++    S3C2410_GPF(3),
++    S3C2410_GPF(4),
++    S3C2410_GPF(5),
++    S3C2410_GPF(6),
++    S3C2410_GPG(0),
++    S3C2410_GPG(1),
++    S3C2410_GPG(2),
++    S3C2410_GPG(3),
++    S3C2410_GPG(5),
++    S3C2410_GPG(6),
++    S3C2410_GPG(7),
++    S3C2410_GPG(9),
++    S3C2410_GPG(10),
++    S3C2410_GPG(11),
++    S3C2410_GPE(11),
++    S3C2410_GPE(12),
++    S3C2410_GPE(13),
++    S3C2410_GPE(14),
++    S3C2410_GPE(15),
++    S3C2410_GPH(9),
++    S3C2410_GPH(10),
++};
++
+ /*  CON5
+  *	+--+	 /-----\
+  *	|  |    |	|
+@@ -718,14 +748,22 @@
+ static void __init mini2440_gpio_keys_setup(void)
+ {
+	int i;
+-	/* mark the key as input, without pullups (there is one on the board) */
++	/* mark the key as input (pullups should have been setup already) */
+	for (i = 0; i < ARRAY_SIZE(mini2440_buttons); i++) {
+-		s3c2410_gpio_pullup(mini2440_buttons[i].gpio, 1);
+		s3c2410_gpio_cfgpin(mini2440_buttons[i].gpio,
+					S3C2410_GPIO_INPUT);
+	}
+ }
+
++static void __init mini2440_pullups_setup(void)
++{
++	int i;
++	/* mark the key as input, without pullups (there is one on the board) */
++	for (i = 0; i < ARRAY_SIZE(mini2440_disabled_pullups); i++) {
++		s3c2410_gpio_pullup(mini2440_disabled_pullups[i], 1);
++	}
++}
++
+ /*
+  * mini2440_features string
+  *
+@@ -903,6 +941,8 @@
+		set_s3c2410ts_info(&mini2440_ts_cfg);
+ #endif
+
++    mini2440_pullups_setup();
++
+     if (features.done & FEATURE_GPIO_KEYS)
+         mini2440_gpio_keys_setup();
+

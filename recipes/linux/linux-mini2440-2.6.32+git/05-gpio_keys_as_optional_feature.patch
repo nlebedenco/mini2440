@@ -1,0 +1,93 @@
+--- linux-2.6.32/arch/arm/mach-s3c2440/mach-mini2440.c	2010-07-02 15:03:08.000000000 -0300
++++ linux-2.6.32/arch/arm/mach-s3c2440/mach-mini2440.c	2010-07-02 15:02:12.000000000 -0300
+@@ -623,7 +623,6 @@
+	&mini2440_led2,
+	&mini2440_led3,
+	&mini2440_led4,
+-	&mini2440_button_device,
+	&s3c_device_nand,
+	&s3c_device_sdi,
+	&s3c_device_iis,
+@@ -642,6 +641,17 @@
+	s3c_device_sdi.dev.platform_data = &mini2440_mmc_cfg;
+ }
+
++static void __init mini2440_gpio_keys_setup(void)
++{
++	int i;
++	/* mark the key as input, without pullups (there is one on the board) */
++	for (i = 0; i < ARRAY_SIZE(mini2440_buttons); i++) {
++		s3c2410_gpio_pullup(mini2440_buttons[i].gpio, 1);
++		s3c2410_gpio_cfgpin(mini2440_buttons[i].gpio,
++					S3C2410_GPIO_INPUT);
++	}
++}
++
+ /*
+  * mini2440_features string
+  *
+@@ -649,6 +659,7 @@
+  * b = backlight control
+  * c = camera [TODO]
+  * 0-9 LCD configuration
++ * k = GPIO Button Keys
+  *
+  */
+ static char mini2440_features_str[12] __initdata = "0tb";
+@@ -666,6 +677,7 @@
+ #define FEATURE_BACKLIGHT (1 << 1)
+ #define FEATURE_TOUCH (1 << 2)
+ #define FEATURE_CAMERA (1 << 3)
++#define FEATURE_GPIO_KEYS (1 << 4)
+
+ struct mini2440_features_t {
+	int count;
+@@ -738,6 +750,16 @@
+					&s3c_device_camif;
+			features->done |= FEATURE_CAMERA;
+			break;
++		case 'k':
++			if (features->done & FEATURE_GPIO_KEYS)
++				printk(KERN_INFO "MINI2440: '%c' ignored, "
++					"gpio keys already registered\n", f);
++			else {
++				features->optional[features->count++] =
++					&mini2440_button_device;
++				features->done |= FEATURE_GPIO_KEYS;
++			}
++			break;
+		}
+	}
+ }
+@@ -745,7 +767,6 @@
+ static void __init mini2440_init(void)
+ {
+	struct mini2440_features_t features = { 0 };
+-	int i;
+
+	printk(KERN_INFO "MINI2440: Option string mini2440=%s\n",
+			mini2440_features_str);
+@@ -768,12 +789,6 @@
+	/* Make sure the D+ pullup pin is output */
+	s3c2410_gpio_cfgpin(S3C2410_GPC(5), S3C2410_GPIO_OUTPUT);
+
+-	/* mark the key as input, without pullups (there is one on the board) */
+-	for (i = 0; i < ARRAY_SIZE(mini2440_buttons); i++) {
+-		s3c2410_gpio_pullup(mini2440_buttons[i].gpio, 1);
+-		s3c2410_gpio_cfgpin(mini2440_buttons[i].gpio,
+-					S3C2410_GPIO_INPUT);
+-	}
+	if (features.lcd_index != -1) {
+		int li;
+
+@@ -803,6 +818,9 @@
+		set_s3c2410ts_info(&mini2440_ts_cfg);
+ #endif
+
++    if (features.done & FEATURE_GPIO_KEYS)
++        mini2440_gpio_keys_setup();
++
+	platform_add_devices(mini2440_devices, ARRAY_SIZE(mini2440_devices));
+
+	if (features.count)	/* the optional features */
+

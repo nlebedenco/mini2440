@@ -1,0 +1,36 @@
+--- linux-2.6.32/drivers/mtd/nand/nand_bbt.c	2010-06-21 23:10:54.000000000 -0300
++++ linux-2.6.32/drivers/mtd/nand/nand_bbt.c	2010-06-22 00:58:08.000000000 -0300
+@@ -1030,7 +1030,7 @@
+	/* Allocate a temporary buffer for one eraseblock incl. oob */
+	len = (1 << this->bbt_erase_shift);
+	len += (len >> this->page_shift) * mtd->oobsize;
+-	buf = kmalloc(len, GFP_KERNEL);
++	buf = vmalloc(len);
+	if (!buf) {
+		printk(KERN_ERR "nand_update_bbt: Out of memory\n");
+		return -ENOMEM;
+@@ -1063,7 +1063,7 @@
+	}
+
+  out:
+-	kfree(buf);
++	vfree(buf);
+	return res;
+ }
+
+--- linux-2.6.32/drivers/mtd/nand/s3c2410.c	2010-05-04 03:29:15.000000000 -0300
++++ linux-2.6.32/drivers/mtd/nand/s3c2410.c	2010-06-22 00:35:30.000000000 -0300
+@@ -864,10 +864,9 @@
+	}
+
+	/* If you use u-boot BBT creation code, specifying this flag will
+-	 * let the kernel fish out the BBT from the NAND, and also skip the
+-	 * full NAND scan that can take 1/2s or so. Little things... */
++	 * let the kernel fish out the BBT from the NAND */
+	if (set->flash_bbt)
+-		chip->options |= NAND_USE_FLASH_BBT | NAND_SKIP_BBTSCAN;
++		chip->options |= NAND_USE_FLASH_BBT;
+ }
+
+ /**
+
