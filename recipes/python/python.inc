@@ -20,4 +20,5 @@ EXTRA_OECONF = "\
   --with-signal-module \
   --with-wctype-functions \
   --enable-shared \
+  --with-zlib \
 "
