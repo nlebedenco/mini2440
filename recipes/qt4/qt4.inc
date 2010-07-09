@@ -10,7 +10,13 @@ QT_CONFIG_FLAGS += "-release -no-cups -no-accessibility -reduce-relocations \
                     -shared -no-nas-sound -no-sm -no-nis \
                     -qt-gif -system-libjpeg -system-libpng -system-zlib \
                     -no-sql-ibase -no-sql-mysql -no-sql-odbc -no-sql-psql -no-sql-sqlite -no-sql-sqlite2 \
-                    -no-pch -qdbus -stl -glib -phonon -webkit"
+                    -no-pch -qdbus -no-stl -glib -no-phonon -no-webkit -no-scripttools \
+                    -no-feature-STYLE_MOTIF -no-feature-STYLE_WINDOWSCE -no-feature-STYLE_WINDOWSVISTA \
+                    -no-opengl -no-xcursor -no-xfixes -no-xrandr -no-xrender -no-xkb -no-xinerama -no-xshape \
+                    -no-mmx -no-3dnow -no-sse -no-sse2 \
+                    -no-qt3support -no-libtiff -no-libmng \
+                    -nomake examples -nomake demos \
+                    -no-separate-debug-info"
 
 EXTRA_OEMAKE = "-e"
 

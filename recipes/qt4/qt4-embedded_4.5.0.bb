@@ -25,9 +25,11 @@ S = "${WORKDIR}/qt-embedded-linux-opensource-src-${PV}"
 QT_CONFIG_FLAGS += " \
     -qtlibinfix E \
     -qt-decoration-styled -plugin-decoration-default -plugin-decoration-windows \
-    -plugin-gfx-transformed -plugin-gfx-qvfb -plugin-gfx-vnc \
-    -plugin-mouse-tslib -qt-mouse-pc -qt-mouse-qvfb \
-    -qt-kbd-tty -qt-kbd-usb -qt-kbd-qvfb \
+    -no-gtkstyle \
+    -plugin-gfx-transformed -no-gfx-qvfb -no-gfx-vnc \
+    -depths 16,32 -qt-gfx-linuxfb \
+    -plugin-mouse-tslib -qt-mouse-pc -no-mouse-qvfb \
+    -qt-kbd-tty -qt-kbd-usb -no-kbd-qvfb \
     -DQT_KEYPAD_NAVIGATION \
     "
 
