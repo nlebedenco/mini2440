@@ -1,0 +1,14 @@
+--- a/config.tests/unix/fvisibility.test	2010-07-09 14:25:13.000000000 -0300
++++ b/config.tests/unix/fvisibility.test	2010-07-09 14:25:26.000000000 -0300
+@@ -15,9 +15,9 @@
+ EOF
+
+     if [ "$VERBOSE" = "yes" ] ; then
+-        "$COMPILER" -c -fvisibility=hidden fvisibility.c && FVISIBILITY_SUPPORT=yes
++        $COMPILER -c -fvisibility=hidden fvisibility.c && FVISIBILITY_SUPPORT=yes
+     else
+-        "$COMPILER" -c -fvisibility=hidden fvisibility.c >/dev/null 2>&1 && FVISIBILITY_SUPPORT=yes
++        $COMPILER -c -fvisibility=hidden fvisibility.c >/dev/null 2>&1 && FVISIBILITY_SUPPORT=yes
+     fi
+     rm -f fvisibility.c fvisibility.o
+ }

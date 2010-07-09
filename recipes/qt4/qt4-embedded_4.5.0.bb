@@ -16,6 +16,7 @@ SRC_URI = "ftp://ftp.trolltech.com/qt/source/qt-embedded-linux-opensource-src-${
            file://${PV}/0008-qt-lib-infix.patch;patch=1 \
            file://0009-support-2bpp.patch;patch=1 \
            file://${PV}/0010-no-simpledecoration-example.patch;patch=1 \
+           file://fvisibility.patch;patch=1 \
            file://g++.conf \
            file://linux.conf \
            "
