@@ -3,7 +3,7 @@ SECTION = "libs"
 LICENSE = "GPL LGPL QPL"
 PRIORITY = "optional"
 HOMEPAGE = "http://www.trolltech.com"
-DEPENDS += "tslib"
+DEPENDS += "directfb tslib"
 DEFAULT_PREFERENCE = "-1"
 
 SRC_URI = "ftp://ftp.trolltech.com/qt/source/qt-embedded-linux-opensource-src-${PV}.tar.bz2 \
@@ -26,7 +26,7 @@ QT_CONFIG_FLAGS += " \
     -qtlibinfix E \
     -qt-decoration-styled -plugin-decoration-default -plugin-decoration-windows \
     -no-gtkstyle \
-    -plugin-gfx-transformed -no-gfx-qvfb -no-gfx-vnc \
+    -plugin-gfx-transformed -no-gfx-qvfb -no-gfx-vnc -plugin-gfx-directfb \
     -depths 16,32 -qt-gfx-linuxfb \
     -plugin-mouse-tslib -qt-mouse-pc -no-mouse-qvfb \
     -qt-kbd-tty -qt-kbd-usb -no-kbd-qvfb \
