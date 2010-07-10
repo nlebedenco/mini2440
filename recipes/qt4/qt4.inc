@@ -193,19 +193,19 @@ python populate_packages_prepend() {
 
 		bb.data.setVar('PACKAGES', packages, d)
 
-	qtopia_split('accessible',  'accessible',  '^libq(.*)\.so$')
-	qtopia_split('codecs',      'codec',       '^libq(.*)\.so$')
+#	qtopia_split('accessible',  'accessible',  '^libq(.*)\.so$')
+#	qtopia_split('codecs',      'codec',       '^libq(.*)\.so$')
 	qtopia_split('decorations', 'decoration',  '^libqdecoration(.*)\.so$')
-	qtopia_split('designer',    'designer',    '^lib(.*)\.so$')
+#	qtopia_split('designer',    'designer',    '^lib(.*)\.so$')
 	qtopia_split('gfxdrivers',  'gfxdriver',   '^libq(.*)\.so$')
 	qtopia_split('mousedrivers','mousedriver', '^libq(.*)mousedriver\.so$')
 	qtopia_split('iconengines', 'iconengine',  '^libq(.*)\.so$')
 	qtopia_split('imageformats','imageformat', '^libq(.*)\.so$')
-	qtopia_split('inputmethods','inputmethod', '^libq(.*)\.so$')
-	qtopia_split('sqldrivers',  'sqldriver',   '^libq(.*)\.so$')
+#	qtopia_split('inputmethods','inputmethod', '^libq(.*)\.so$')
+#	qtopia_split('sqldrivers',  'sqldriver',   '^libq(.*)\.so$')
 	qtopia_split('script',      'script',      '^libqtscript(.*)\.so$')
-	qtopia_split('styles',      'style',       '^libq(.*)\.so$')
-	qtopia_split('phonon_backend',      'phonon-backend',       '^libphonon_(.*)\.so$')
+#	qtopia_split('styles',      'style',       '^libq(.*)\.so$')
+#	qtopia_split('phonon_backend',      'phonon-backend',       '^libphonon_(.*)\.so$')
 }
 
 do_install() {
