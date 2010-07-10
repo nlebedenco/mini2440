@@ -33,7 +33,7 @@ QT_CONFIG_FLAGS += " \
     -DQT_KEYPAD_NAVIGATION \
     "
 
-QT_BASE_NAME = "qt-embedded"
+QT_BASE_NAME = "qt4-embedded"
 QT_BASE_LIB  = "libqt-embedded"
 QT_DIR_NAME = "qtopia"
 QT_LIBINFIX="E"
