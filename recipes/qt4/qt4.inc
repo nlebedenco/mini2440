@@ -80,7 +80,7 @@ ALLOW_EMPTY_${PN} = "1"
 FILES_${PN}     = ""
 FILES_${PN}-dev = " ${includedir}/${QT_DIR_NAME}/Qt/*"
 FILES_${PN}-dbg = ""
-RRECOMMENDS_${PN} = "${LIB_PACKAGES} ${OTHER_PACKAGES}"
+RRECOMMENDS_${PN} = "${LIB_PACKAGES}"
 RRECOMMENDS_${PN}-dev = "${DEV_PACKAGES}"
 RRECOMMENDS_${PN}-dbg = "${DBG_PACKAGES}"
 
