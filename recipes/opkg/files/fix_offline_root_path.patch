@@ -1,0 +1,11 @@
+--- a/libopkg/pkg.c	2009-03-26 12:28:39.000000000 -0300
++++ b/libopkg/pkg.c	2010-07-11 17:14:09.000000000 -0300
+@@ -1531,7 +1531,7 @@
+	  setenv("OPKG_OFFLINE_ROOT", conf->offline_root, 1);
+	  setenv("D", conf->offline_root, 1);
+           if (NULL == conf->offline_root_path || '\0' == conf->offline_root_path[0]) {
+-            setenv("PATH", "/dev/null", 1);
++            setenv("PATH", "/usr/bin:/bin", 1);
+           } else {
+             setenv("PATH", conf->offline_root_path, 1);
+             AllowOfflineMode = true;
