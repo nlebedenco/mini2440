@@ -19,6 +19,7 @@ SRC_URI = "ftp://ftp.trolltech.com/qt/source/qt-embedded-linux-opensource-src-${
            file://fvisibility.patch;patch=1 \
            file://g++.conf \
            file://linux.conf \
+           file://qte.sh \
            "
 S = "${WORKDIR}/qt-embedded-linux-opensource-src-${PV}"
 
@@ -39,5 +40,13 @@ QT_DIR_NAME = "qtopia"
 QT_LIBINFIX="E"
 
 require qt4.inc
+
+# Set necessary variables in the profile
+do_install_append() {
+       install -d ${D}${sysconfdir}/profile.d/
+       install -m 0755 ${WORKDIR}/qte.sh ${D}${sysconfdir}/profile.d/
+}
+
+FILES_${QT_BASE_NAME} += " ${sysconfdir}/profile.d/qte.sh"
 
 inherit qt4e

@@ -5,6 +5,7 @@ SECTION = "base"
 LICENSE = "LGPL"
 
 SRC_URI += "\
+  file://fix_tslib_plugins_linkage.patch;patch=1 \
   file://ts.conf \
   file://ts.conf-collie-2.4 \
   file://ts.conf-simpad-2.4 \
