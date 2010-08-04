@@ -43,6 +43,12 @@ do_compile() {
     oe_runmake noboot
 }
 
+do_stage() {
+    TARGET=${TARGET_SYS} \
+    PATH=${NATIVE_BIN}:$PATH \
+    oe_runmake 'INSTALL_PREFIX=${STAGING_DIR_HOST}' install
+}
+
 do_install() {
     TARGET=${TARGET_SYS} \
     PATH=${NATIVE_BIN}:$PATH \
