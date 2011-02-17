@@ -1,0 +1,2323 @@
+*******************************************************************************
+Introduction
+*******************************************************************************
+OpenEmbedded (OE) is one really powerful system that builds a tailor-made
+distribution for you using recipes. Here is a howto to start quickly with OE
+and configure our mini2440 based system.
+
+
+*******************************************************************************
+Quick Start
+*******************************************************************************
+
+The first step is to make sure that
+
+    * you are running Linux
+    * you have a lot of free space (~13GB)
+    * you have git installed 
+    * you have internet access
+    * you are using a compatible distro. This tutorial was written using
+      kubuntu 8.04.2 (it may work on different distros with a few tweaks)
+
+
+*******************************************************************************
+Host system dependecies
+*******************************************************************************
+
+1) Make sure you have all build dependencies correctly installed. Open a console
+and type:
+
+$ sudo apt-get install sed wget cvs subversion git-core \
+   coreutils unzip texi2html texinfo libsdl1.2-dev docbook-utils \
+   gawk python-pysqlite2 diffstat help2man make gcc build-essential g++ \
+   texi2html libncurses5-dev python-dev python-psyco \
+   gnome-doc-utils gettext automake docbook bison flex libxml2-utils xmlto \
+   libz-dev picocom lrzsz netpbm libgtk2.0-dev
+
+As you "bitbake" as a normal user, don't forget to add /sbin to your PATH,
+just to be able to use tune2fs (if needed)
+
+2) Fix vm.mmap_min_addr. Edit /etc/sysctl.conf (as root): 
+
+    * Add the following line:
+
+      vm.mmap_min_addr = 0
+
+3) Make sure your /bin/sh points to bash and not dash or some other shell as is
+usually the case with Ubuntu releases.
+
+In ubuntu and hopefully other debian related distros one can use:
+
+$ sudo dpkg-reconfigure dash
+
+For the purpose of this tutorial, we will assume that we are logged as a 
+non-root user called 'notroot' and our home directory is '/home/notroot'
+All commands should be executed as 'notroot' unless otherwise noted.
+
+This document follows prompt convention of:
+
+A '$' denoting a regular user shell prompt
+A '#' denoting a root user shell prompt
+
+
+*******************************************************************************
+How we forked from the original git://repo.or.cz/openembedded/mini2440.git repo:
+*******************************************************************************
+
+The repository we'll be working on is actually a fork from Michel Pollet's own
+repo, which in its place is also a fork from the original openembedded.org git.
+So the following steps aren't really necessary, since we only need to clone our
+current project's repo but it may be nice to know how to redo the job in any case.
+
+
+1) Create an empty remote repo at github. 
+   Ours will be called git@github.com:nlebedenco/mini2440.git
+
+    $ mkdir ~/mini2440/oe
+    $ cd ~/mini2440/oe
+    $ git init
+    $ touch README
+    $ git add README
+    $ git commit -m 'first commit'
+    $ git remote add origin git@github.com:nlebedenco/mini2440.git
+    $ git push origin master
+
+
+2) Add a remote upstream
+
+    $ git remote add upstream git://repo.or.cz/openembedded/mini2440.git
+
+3) Fetch upstream
+
+    $ git fetch upstream
+
+4) Checkout master, rebase to our upstream/master and push to origin
+
+    $ git checkout master
+    $ git rebase upstream/master
+    $ git push origin --mirror
+
+
+5) Apply the patches
+
+    $ git am -s ~/git-patches/*.patch
+
+6) Push the changes
+
+    $ git push
+
+
+*******************************************************************************
+Setting up OE: cloning the repository as read-write
+*******************************************************************************
+
+$ cd ~
+$ mkdir ~/mini2440
+$ cd ~/mini2440
+$ git clone git@github.com:nlebedenco/mini2440.git oe
+$ cd oe
+$ git checkout master
+$ git remote add upstream git://repo.or.cz/openembedded/mini2440.git
+$ git fetch upstream
+
+
+*******************************************************************************
+Setting up OE: cloning the repository as read-only
+*******************************************************************************
+
+>>> TODO
+
+
+*******************************************************************************
+Setting up OE: local clone preparation
+*******************************************************************************
+
+If you plan on changing some code, sharing, or commiting patches, you 
+should consider setting up your name, email address and a branch to work on:
+
+$ git config --global user.name "Your Name"
+$ git config --global user.email "me@example.com"
+
+$ git branch <branchname>
+$ git checkout <branchname>
+
+Git can produce colorful output in some terminals:
+
+$ git config --global color.diff auto
+$ git config --global color.status auto
+$ git config --global color.branch auto
+
+Now we should create our build and sources directories.
+~/mini2440/build/ is where all the magic is going to happen
+~/mini2440/sources/ is where all sources will be downloaded to
+
+$ mkdir ~/mini2440/sources
+$ mkdir ~/mini2440/build
+
+--------------------------------------------------------------------------------
+Local.conf
+--------------------------------------------------------------------------------
+You need to copy the configuration file we use:
+
+$ cp <custom files>/local.conf /home/notroot/mini2440/oe/conf/
+
+This file contains all our build options. It's not part of the source tree
+because it must contain values that depend on local paths and folders.
+
+You may as well create your own configuration file but you better know what 
+you're doing. If that's the case, just use mini2440_local_conf_example.conf 
+as a starting point.
+
+$ cd /home/notroot/mini2440/oe
+$ cp mini2440_local_conf_example.conf conf/local.conf
+
+A quick explanation on important pieces of our local.conf:
+
+    * Some packages may conflict with multiple build threads and the log output 
+      makes more sense when single threaded. If you have donwloaded all sources 
+      already then most work will be CPU bound anyway, so we have commented the 
+      parallel build lines:
+
+      # PARALLEL_MAKE = "-j4"
+      # BB_NUMBER_THREADS = "4"
+
+
+    * By default, OE keeps everything in the work directory even after the build
+      process is complete (this may easily take more than 20GB!). In order to 
+      save disk space, one may opt to remove the files once they're not needed
+      anymore:
+
+      INHERIT += "rm_work"
+
+
+    * One of the areas in which OpenEmbedded helps you out is by setting various
+      environment variables, such as CC  and PATH etc, to values suitable for
+      cross-compiling. If you wish to manually run configure scripts and compile 
+      files during development it would be nice to have all those values set for 
+      you. This is what devshell does - it provides you with an interactive 
+      shell with all the appropriate variables set for cross-compiling.
+      Devshell via inherit is the newer method of obtaining a devshell and is 
+      the recommended way for most users now. The newer method requires that the 
+      devshell class be added to your configuration by inheriting it, so the lines:
+
+      INHERIT += "devshell"
+      TERMCMD = "${KONSOLE_TERMCMD}"
+      TERMCMDRUN = "${KONSOLE_TERMCMDRUN}"
+      # Some common terminal programs to choose from
+      GNOME_TERMCMD = 'gnome-terminal --disable-factory -t "$TERMWINDOWTITLE"'
+      GNOME_TERMCMDRUN = '${GNOME_TERMCMD} -x $SHELLCMDS'
+      SCREEN_TERMCMD = 'screen -D -m -t "$TERMWINDOWTITLE"'
+      SCREEN_TERMCMDRUN = '${SCREEN_TERMCMD} $SHELLCMDS'
+      XTERM_TERMCMD = 'xterm -T "$TERMWINDOWTITLE"'
+      XTERM_TERMCMDRUN = '${XTERM_TERMCMD} -e $SHELLCMDS'
+      KONSOLE_TERMCMD = 'konsole -T "$TERMWINDOWTITLE"'
+      KONSOLE_TERMCMDRUN = '${KONSOLE_TERMCMD} -e $SHELLCMDS'
+
+
+    * Sources directory. Just pick one:
+
+      DL_DIR = "/home/notroot/mini2440/sources"
+
+
+    * Recipes mask:
+
+      BBFILES = "/home/notroot/mini2440/oe/recipes/*/*.bb"
+
+
+    * Some packages are assumed to be installed on the host system. If they 
+      are not, install them or comment the line. In recent linux distributions 
+      (like kubuntu 8.04.2) gcc has been upgraded to version 4.x. In this case:
+
+      ASSUME_PROVIDED += "gcc4-native"
+
+
+    * Work directory (all produced files, temporary or not, will end up here.
+      Make sure it does not end with a '/' !)
+
+      TMPDIR = /home/notroot/mini2440/build
+
+    * Erlang preferred version:
+
+      PREFERRED_VERSION_erlang = "R13B.4"
+      PREFERRED_VERSION_erlang-native = "R13B.4"
+
+    * Preferred qt4 version:
+
+      PREFERRED_PROVIDER_qt4-embedded = qt4-embedded
+      PREFERRED_VERSION_qt4-embedded = "4.5.0"
+      PREFERRED_VERSION_qt4-tools-native = "4.5.0"
+
+
+    * Preferred psplash provider:
+
+      PREFERRED_PROVIDER_virtual/psplash = psplash-mini2440
+
+
+    * Our mini2440.conf is modified to let us define the flash image geometry 
+      64Mb NAND flash uses 0x200 pagesize and 16KiB erase blocks
+      128Mb NAND flash uses 0x800 pagesize and 128KiB erase blocks
+
+      IMAGE_JFFS2_PAGE_SIZE = "0x800"
+      IMAGE_JFFS2_ERASE_BLOCK = "128KiB"
+
+--------------------------------------------------------------------------------
+Enviroment variables
+--------------------------------------------------------------------------------
+A bitbake binary comes with the repository files. That's the one we will use.
+If you have bitbake installed in your local system you might want to uninstall
+it using your package manager or make sure that the correct one appears first 
+in the path. Besides, bitbake needs to know where your OE root is so you need 
+to export the BBPATH.
+
+Edit ~/.bashrc:
+
+    * Add the following lines to the end of the file:
+
+      export PATH=$PATH:/home/notroot/mini2440/oe/bitbake/bin
+      export BBPATH=/home/notroot/mini2440/oe
+
+
+To have this effect immediately, just type bash (yeah that's dirty, a clean way 
+is to do $ source ~/.bashrc) or logout and login again. If you're using an 
+X-based desktop just close the terminal window and open a new one.
+
+--------------------------------------------------------------------------------
+Downloaded sources
+--------------------------------------------------------------------------------
+
+Even if you decide to build the whole environment by hand instead of
+using a pre-packed tree you can cut you a lot of download time. Place
+the pre-downloaded source files into ~/mini2440/sources/
+
+$ cp ./sources/* /home/notroot/mini2440/sources/
+
+Bitbake also lets you fetch sources only, rather than building the recipes. This
+might be a good idea unless you don't mind spending a couple of ours before you
+find out a dependency could not be satisfied.
+
+$ bitbake <recipe> -c fetchall
+
+--------------------------------------------------------------------------------
+Customizing the framebuffer boot logo
+--------------------------------------------------------------------------------
+
+To create a logo file:
+
+    1) Open the image in gimp or wherever.
+    2) Resize it to 80x80
+    3) Save the image back to png format with then name logo.png
+    4) Copy the file logo.png to
+       /home/notroot/mini2440/oe/recipes/linux/linux-mini2440-2.6.32+git/
+       replacing the default one
+
+--------------------------------------------------------------------------------
+Customize the boot splash
+--------------------------------------------------------------------------------
+
+psplash requires that gtk2-devel package be installed in the host system for 
+the 'gdk-pixbuf-csource' command used to generate the image header files 
+- see 'make-image-header.sh' script. In ubuntu, gtk2-devel can be installed with:
+
+~# sudo apt-get install libgtk2.0-dev
+
+To create the image files:
+
+    Two image files will be needed. One for the main splash, another for the 
+    progress bar border (the bar itself is actually drawn by psplash). The names
+    should be psplash-hand.png and psplash-bar.png
+
+   - psplash-hand.png (240x320 pixels)
+   - psplash-bar.png (230x28 pixels )
+
+You need to save the .png files with the Alpha layer present otherwise the 
+display code fails to work correctly.
+
+Place the two image files in the folder: recipes/psplash/files/mini2440/
+replacing the default ones
+
+You can change the background color, text color, bar and text positions
+by modifying the following defines in the file 
+recipes/psplash/files/configurability.patch:
+PSPLASH_BACKGROUND_COLOR_R, PSPLASH_BACKGROUND_COLOR_G, 
+PSPLASH_BACKGROUND_COLOR_B, PSPLASH_PROGRESS_COLOR_R,
+PSPLASH_PROGRESS_COLOR_G, PSPLASH_PROGRESS_COLOR_B,
+PSPLASH_TEXT_COLOR_R, PSPLASH_TEXT_COLOR_G,
+PSPLASH_TEXT_COLOR_B, PSPLASH_PROGRESS_DIVIDER,
+PSPLASH_TEXT_DIVIDER
+
+To disable the bootsplash in the mini2440 pass "psplash=false" as a parameter on 
+the kernel command line.
+
+--------------------------------------------------------------------------------
+Building
+--------------------------------------------------------------------------------
+This is going to be long (hopefully, otherwise there is a problem):
+
+For a basic image use:
+
+$ bitbake mini2440-image
+
+For an image including erlang R13B04:
+
+$ bitbake mini2440-erlang-image
+
+For an image including qt4 use:
+
+$ bitbake mini2440-qt4-image
+
+For an image including erlang and qt4 use:
+
+$ bitbake mini2440-erlang-qt4-image
+
+Now go have a cup of coffee, watch TV or read a book.
+
+--------------------------------------------------------------------------------
+QT4
+--------------------------------------------------------------------------------
+
+qt4.5.0 can be built using the qt4-embedded recipe. There are two images that 
+include qt4, both based on the original mini2440 image:
+
+    - mini2440-qt4-image
+    - mini2440-erlang-qt4-image
+
+The qt4-embedded recipe creates additional packages that are not installed by 
+default in the generated images. Dependending on your board setup you may wish 
+to install some of them separately.
+
+>>> TODO: installing additional qt4 packages
+
+
+*******************************************************************************
+Install
+*******************************************************************************
+
+Images are located in:
+/home/notroot/mini2440/build/deploy/glibc/images/mini2440/
+
+There are links to various formats of the linux root image you just built.
+
+    *.tar.gz is a compressed archive with the root fs in it, make an empty
+      partition on an sd card and just tar -vxzf <file> on it
+    *.jffs2 is a partition for block devices like the NAND on the mini2440, you
+      can flash it using the bootloader
+    *.ext3 is a partition that you can copy to a sd card for example using dd
+      with something like this:
+
+      dd if=mini2440-image-mini2440.ext3 of=/dev/mmc1p0
+
+Beware though, you will loose everything on your SD card.
+
+uImage-mini2440.bin is a link to your kernel. You will want to write it to your
+flash somewhere uboot can find (see Mini2440 First Configuration).
+
+u-boot-mini2440.bin is a link to the latest u-boot version build, if you already
+have u-boot installed, no need to reinstall it.
+
+Packages are located in:
+/home/notroot/mini2440/build/deploy/glibc/ipk/
+
+If you already have an image you worked on, and you don't want to start
+from scratch because you need another library/software, compile it using bitbake
+
+$ bitbake <recipe>
+
+Where <recipe> is the name of the recipe you want to execute. When it is
+finished, go to the ipk directory, then probably to the armv4t directory, 
+and grab your package there. A recipe can build multiple packages, for example, 
+socket can produce two packages, while qt4-embedded produce about thirty 
+(not kidding) packages.
+
+
+*******************************************************************************
+How can I customize an image ?
+*******************************************************************************
+You can make your own image that would inherit from console-image, 
+mini2440-image or any other image you want, and add the packages you want 
+installed.
+
+Just go to /home/notroot/mini2440/oe/recipes/images/, make a new file my-image.bb
+and edit it.
+
+Here is a sample recipe (qt4-image.bb) that install qt4-embedded and some part
+of boost automatically:
+
+#Qt4 + boost image
+require console-image.bb
+
+DEPENDS += "qt4-embedded boost tslib"
+
+IMAGE_INSTALL += "qt4-embedded \
+                  tslib-calibrate tslib-tests \
+                  boost-thread boost-date-time"
+
+export IMAGE_BASENAME = "qt4-image"
+
+
+*******************************************************************************
+Bitbake hints:
+*******************************************************************************
+
+$ bitbake -k <recipe>   
+	continues building even if there are errors, ideal for overnight builds.
+
+$ bitbake <recipe> -c clean
+	deletes the built recipe
+
+$ bitbake <recipe> -c rebuild
+	rebuilds the recipe
+
+$ bitbake <recipe> -c deploy
+	redeploys the selected recipe
+
+$ bitbake <recipe> -c fetch
+    download sources but dont build
+
+
+*******************************************************************************
+Replace supervivi with U-boot
+*******************************************************************************
+
+--------------------------------------------------------------------------------
+Loading U-boot using Linux
+--------------------------------------------------------------------------------
+
+This gets rid of the QTopia install completely. You can always reflash it with 
+vivi later if you really care, but we dont. This page assumes you are running a 
+reasonably standard linux distro for the first bit (xmodem).
+
+    * you must have picocom installed in the host computer
+    * you must also have a tftp server available in your host computer; 
+      here, we assume there's a /tftpboot folder available
+    * switch to NOR BOOT and turn on the board.
+    * place the u-boot binary in your /tftpboot directory
+    * plug on the main serial port. If you use a usb/serial adapter it's most 
+      probably /dev/ttyUSB0.
+
+$ picocom -b 115200 /dev/ttyS0 --send-cmd "sx -vv"
+picocom v1.4
+
+port is        : /dev/ttyS0
+ flowcontrol    : none
+ baudrate is    : 115200
+ parity is      : none
+ databits are   : 8
+ escape is      : C-a
+ noinit is      : no
+ noreset is     : no
+ nolock is      : no
+ send_cmd is    : sx -vv 
+ receive_cmd is : rz -vv
+
+Terminal ready
+
+Now type return... to see the "vivi" bootloader menu. We're going to immediately
+quit that menu too. 
+ ##### FriendlyARM BIOS for 2440 #####
+ x bon part 0 320k 2368k
+ v Download vivi
+ k Download linux kernel
+ y Download root_yaffs image
+ c Download root_cramfs image
+ a Absolute User Application
+ n Download Nboot
+ e Download Eboot
+ i Download WinCE NK.nb0
+ w Download WinCE NK.bin
+ d Download & Run
+ z Download zImage into RAM
+ g Boot linux from RAM
+ f Format the nand flash
+ p Partition for Linux
+ b Boot the system
+ s Set the boot parameters
+ t Print the TOC struct of wince
+ u Backup NAND Flash to HOST through USB(upload)
+ r Restore NAND Flash from HOST through USB
+ q Goto shell of vivi
+ Enter your selection: q 
+
+This sets us up to the "command line" mode of vivi. We're going to attempt to
+load the u-boot code into RAM first, and run it from there. We could flash it 
+directly here, but since we are going to scrub the nand, it's irrelevant.
+
+First, check the size of the u-boot.
+
+$ ls -l /tftpboot/u-boot.bin 
+-rw-r--r-- 1 michel michel 232448 Mar 13 09:28 /tftpboot/u-boot.bin
+
+vivi default parameters are wrong, you need a longer timeout otherwise xmodem
+will not work. 
+
+Supervivi> param set xmodem_timeout 100000000 
+Change 'xmodem_timeout' value. 0x000f4240(1000000) to 0x05f5e100(100000000)
+
+Now, tell vivi to start receiving something of 232448 bytes: 
+
+Supervivi> load ram 0x33f80000 232448 x
+Ready for downloading using xmodem...
+ Waiting...
+
+
+Now in picocom, type "control A" then "control S", this brings a filename
+prompt.
+ +++ file: /tftpboot/u-boot.bin 
+sx -vv /tftpboot/u-boot.bin
+ Sending /tftpboot/u-boot.bin, 1816 blocks: Give your local XMODEM
+receive command now.
+ Bytes Sent: 232448   BPS:7259
+
+Transfer complete
+
++++ exit status: 0
+ 2448 bytes
+ Supervivi>
+
+
+Loaded !
+
+If you have supervivi complaining it doesn't support xmodem you'll have to use
+dnw in win32 (no usbdriver for 64bit to the moment) at least to load u-boot.
+
+
+--------------------------------------------------------------------------------
+Loading U-boot using Windows
+--------------------------------------------------------------------------------
+
+This page assumes you are running Windows XP 32bits. The usb driver doesn't work
+on 64bit systems. 
+
+You will need:
+
+    * pre-installed friendly arm usb driver
+    * tft32 standalone server
+    * putty serial terminal
+    * DNW utility
+
+Technically, one could go with Hyperterminal rather then putty+DNW.
+Hyperterminal is an ol windows utility used for telnet and serial comunications 
+and capable of xmodem file transfers. In this case just follow the same 
+instructions given for linux hosts but using hyperterminal instead of picocom, 
+and tft32 as a standalone tftp server. Note that in some mini2440 boards vivi
+does not come with xmodem support so you may not have a choice here.
+
+Make sure you have installed the FriendlyArm USB driver. Connect the USB cable 
+to the board along side to the serial cable. 
+
+Open putty and connect to the appropriate serial port (settings are 115200, 8N1)
+
+##### FriendlyARM BIOS for 2440 #####
+ x bon part 0 320k 2368k
+ v Download vivi
+ k Download linux kernel
+ y Download root_yaffs image
+ c Download root_cramfs image
+ a Absolute User Application
+ n Download Nboot
+ e Download Eboot
+ i Download WinCE NK.nb0
+ w Download WinCE NK.bin
+ d Download & Run
+ z Download zImage into RAM
+ g Boot linux from RAM
+ f Format the nand flash
+ p Partition for Linux
+ b Boot the system
+ s Set the boot parameters
+ t Print the TOC struct of wince
+ u Backup NAND Flash to HOST through USB(upload)
+ r Restore NAND Flash from HOST through USB
+ q Goto shell of vivi
+ Enter your selection: q 
+
+This sets us up to the "command line" mode of vivi. We're going to attempt to
+load the u-boot code into RAM first.
+
+Open DNW utility and, assuming you're still connected to the board with a serial 
+console, type the following command:
+
+Supervivi> load ram 0x33f80000 239616 u-boot
+
+Note that 239616 is the actual file size. You may have to check your own file 
+size and change it accordingly.
+
+In the DNW utility click "USB Port" -> "Transfer/Restore" and choose the
+appropriate u-boot image file. You will see:
+
+
+USB host is not connected yet.
+USB host is connected. Waiting a download.
+
+Now, Downloading [ADDRESS:33f80000h,TOTAL:239626]
+RECEIVED FILE SIZE:  239626 (234KB/S, 1S)
+Downloaded file at 0x33f80000, size = 239616 bytes
+
+
+Now, lets RUN the code we have loaded:
+
+Supervivi> go 0x33f80000 
+
+U-Boot 1.3.2-mini2440 (May  4 2010 - 06:36:02)
+
+I2C:   ready
+DRAM:  64 MB
+Flash:  2 MB
+NAND:  Bad block table not found for chip 0
+Bad block table not found for chip 0
+128 MiB
+*** Warning - bad CRC or NAND, using default environment
+
+USB:   S3C2410 USB Deviced
+In:    serial
+Out:   serial
+Err:   serial
+MAC: 08:08:11:18:12:27
+Hit any key to stop autoboot:  0
+
+MINI2440 #
+
+
+--------------------------------------------------------------------------------
+Check factory bad blocks
+--------------------------------------------------------------------------------
+The nand comes with a list of "already bad" blocks, we can consult:
+
+MINI2440 # nand info 
+Device 0: NAND 128MiB 3,3V 8-bit, page size 2048, sector size 128 KiB
+
+MINI2440 # nand bad 
+Device 0 bad blocks:
+  00440000
+  00480000
+  00800000
+  00a00000
+  044c0000
+  069c0000
+  07f80000
+  07fa0000
+  07fc0000
+  07fe0000
+
+
+--------------------------------------------------------------------------------
+Scrub the nand
+--------------------------------------------------------------------------------
+It's better to clean the nand completely, detect real bad blocks and such.
+U-boot complains a bit about it, but we want a clean nand and will create a 
+nice, up-to-date table. 
+
+MINI2440 # nand scrub 
+NAND scrub: device 0 whole chip
+Warning: scrub option will erase all factory set bad blocks!
+         There is no reliable way to recover them.
+         Use this command only for testing purposes if you
+         are sure of what you are doing!
+
+Really scrub this NAND flash? <y/N>
+Erasing at 0x3c0000 --   3% complete.
+NAND 128MiB 3,3V 8-bit: MTD Erase failure: -5
+
+NAND 128MiB 3,3V 8-bit: MTD Erase failure: -5
+Erasing at 0x7a0000 --   6% complete.
+NAND 128MiB 3,3V 8-bit: MTD Erase failure: -5
+Erasing at 0x8e0000 --   7% complete.
+NAND 128MiB 3,3V 8-bit: MTD Erase failure: -5
+Erasing at 0x43c0000 --  53% complete.
+NAND 128MiB 3,3V 8-bit: MTD Erase failure: -5
+Erasing at 0x68e0000 --  82% complete.
+NAND 128MiB 3,3V 8-bit: MTD Erase failure: -5
+Erasing at 0x7fe0000 -- 100% complete.
+Bad block table not found for chip 0
+Bad block table not found for chip 0
+OK
+
+
+So, it seems it didn't find any more bad blocks, we're clean.
+
+MINI2440 # nand bad
+Device 0 bad blocks:
+  00440000
+  00480000
+  00800000
+  00a00000
+  044c0000
+  069c0000
+  07f80000
+  07fa0000
+  07fc0000
+  07fe0000
+
+
+--------------------------------------------------------------------------------
+Create a Bad Block Table
+--------------------------------------------------------------------------------
+This writes this table on the last blocks of the flash, so the kernel can find
+it. This takes a while so stand by.
+
+MINI2440 # nand createbbt
+Create BBT and erase everything ? <y/N>
+Skipping bad block at  0x00440000
+Skipping bad block at  0x00480000
+Skipping bad block at  0x00800000
+Skipping bad block at  0x00a00000
+Skipping bad block at  0x044c0000
+Skipping bad block at  0x069c0000
+Skipping bad block at  0x07f80000
+Skipping bad block at  0x07fa0000
+Skipping bad block at  0x07fc0000
+Skipping bad block at  0x07fe0000
+
+Creating BBT. Please wait ...Bad block table not found for chip 0
+Bad block table not found for chip 0
+Bad block table written to 0x07fe0000, version 0x01
+Bad block table written to 0x07fc0000, version 0x01
+
+MINI2440 #
+
+
+--------------------------------------------------------------------------------
+Default NAND Partions
+--------------------------------------------------------------------------------
+By default u-boot uses a default set of variables, because it can't find a valid
+one in the nand. 
+First lets look where the default partitioning:
+
+MINI2440 # mtdparts 
+
+device nand0 <mini2440-nand>, # parts = 4
+ #: name                        size            offset          mask_flags
+ 0: u-boot              0x00040000      0x00000000      0
+ 1: env                 0x00020000      0x00040000      0
+ 2: kernel              0x00500000      0x00060000      0
+ 3: root                0x07aa0000      0x00560000      0
+
+active partition: nand0,0 - (u-boot) 0x00040000 @ 0x00000000
+
+defaults:
+mtdids  : nand0=mini2440-nand
+mtdparts: <NULL>
+
+MINI2440 #
+
+So the environment is suposed to be written at 0x00040000 in the NAND.
+
+
+--------------------------------------------------------------------------------
+Set the environmnet "dynamic" offset
+--------------------------------------------------------------------------------
+This u-boot has a way to have a "dynamic" environment offset written in the
+first NAND block (the most resilient block on the chip!). It will allow you to
+skip a "bad" environment block and relocate it somewhere further the chip.
+
+You first need to tell u-boot to save the default environment offset.
+
+MINI2440 # dynenv set env
+device 0 offset 0x40000, size 0x20000
+45 4e 56 30 - 00 00 04 00
+
+MINI2440 #
+
+
+--------------------------------------------------------------------------------
+Setup a network connection
+--------------------------------------------------------------------------------
+
+The board does not have an eeprom with a valid MAC address, it relies on the
+bootloader to set it, and it can be anything that is "valid". Since you are not 
+a constructor, you don't have "registered" addresses, so what I ususaly do is 
+pick addresses from a "dead" nanufacturer. 
+
+My current favourite is "Pr1me Computers", long dead, plenty of valid MAC
+addresses !
+
+MINI2440 # set ethaddr 08:00:2f:00:00:02 
+
+Before flashing u-boot you need a working network connection to a remote 
+TFTP server. Setup the board to use a valid static IP address/netmask/serverip
+
+MINI2440 # setenv ipaddr 10.1.0.2
+MINI2440 # setenv netmask 255.255.255.0
+MINI2440 # setenv serverip 10.1.0.1
+MINI2440 # ping 10.1.0.1
+dm9000 i/o: 0x20000300, id: 0x90000a46
+DM9000: running in 16 bit mode
+MAC: 08:08:11:18:12:27
+checksum bad
+checksum bad
+checksum bad
+host 10.1.0.1 is alive
+
+You can also use the dhcp command to get a dynamic ip addr if available
+
+MINI2440 # dhcp
+
+Note that if you have reset your board instead of cycling power off and on
+the DM9000 chip may get unresponsive and you'll receive the following messages:
+
+ERROR: resetting DM9000 -> not responding
+dm9000 not found at 0x20000300 id: 0x3692b6db
+ping failed; host 10.1.0.1 is not alive
+
+Just turn the board off and restart the procedure.
+
+You can also pass the operating system what should the initial ifconfig values
+but there's an error in the definition of two environment variables related to
+networking. Fix that by 
+
+MINI2440 # setenv ifconfig_static setenv ifconfig ip=${ipaddr}:${serverip}::${netmask}:mini2440:eth0
+MINI2440 # setenv ifconfig_dhcp setenv ifconfig ip=dhcp
+
+And now, to set the ifconfig variable to the static ip already configured in
+u-boot you can run:
+
+MINI2440 # run ifconfig_static 
+
+Otherwise, to use dhcp run:
+
+MINI2440 # run ifconfig_dhcp
+
+
+--------------------------------------------------------------------------------
+Setup bootargs
+--------------------------------------------------------------------------------
+
+The new 3.5" screens need the mini2440 variable set to "3tb" instead of "0tb"
+"3" is the display timing value passed to the kernel.
+
+Also, if you're using the patches which include spi0 and gpj support you may
+choose to enable those features by appending:
+
+'k': enable gpio-keys
+'s': enable spi0
+
+MINI2440 # setenv mini2440 mini2440=3tbs
+
+There are also some smart variables you can use to quickly reconfigure u-boot
+
+MINI2440 # run set_bootargs_nand
+
+This will setup the bootargs value using other environment variables so u-boot 
+will boot from nand
+
+MINI2440 # run set_bootargs_nfs
+
+This will setup bootargs to boot from NFS
+
+You will also need to setup the boot command at least once:
+
+MINI2440 # setenv bootcmd nboot.e kernel\;bootm
+
+Save your enviroment with:
+
+MINI2440 # saveenv
+
+Saving Environment to NAND...
+ Erasing Nand...
+
+
+In order to have the kernel boot be less "noisy", or in order to boot more 
+quickly, it is sometimes useful to control the amount of messages displayed to 
+the console during boot. You can do this by setting the kernel log level at boot 
+time via a kernel command line option. See the "loglevel=" argument in 
+<kernel source>/Documentation/kernel-parameters.txt.
+
+You can turn off all messages using the kernel command line option "quiet", 
+or make the kernel show all of them using "debug". 
+
+Note that even if the log level is changed, or "quiet" is used, and the 
+printk messages are not print to console, they are still entered into the log 
+buffer, and they can still be extracted and displayed later using the dmesg 
+command.
+
+-------------------------------------------------------------------------------
+More bootargs: framebuffer boot options
+-------------------------------------------------------------------------------
+
+The framebuffer console has several, largely unknown, boot options that can 
+change its behavior.
+
+fbcon=font:<name>
+
+        Select the initial font to use. The value 'name' can be any of the
+        compiled-in fonts: VGA8x16, 7x14, 10x18, VGA8x8, MINI4x6, RomanLarge,
+        SUN8x16, SUN12x22, ProFont6x11, Acorn8x8, PEARL8x8.
+
+        Note, not all drivers can handle font with widths not divisible by 8,
+        such as vga16fb.
+
+fbcon=scrollback:<value>[k]
+
+        The scrollback buffer is memory that is used to preserve display
+        contents that has already scrolled past your view.  This is accessed
+        by using the Shift-PageUp key combination.  The value 'value' is any
+        integer. It defaults to 32KB.  The 'k' suffix is optional, and will
+        multiply the 'value' by 1024.
+
+fbcon=map:<0123>
+
+        This is an interesting option. It tells which driver gets mapped to
+        which console. The value '0123' is a sequence that gets repeated until
+        the total length is 64 which is the number of consoles available. In
+        the above example, it is expanded to 012301230123... and the mapping
+        will be:
+
+        tty | 1 2 3 4 5 6 7 8 9 ...
+        fb  | 0 1 2 3 0 1 2 3 0 ...
+
+        ('cat /proc/fb' should tell you what the fb numbers are)
+
+        One side effect that may be useful is using a map value that exceeds
+        the number of loaded fb drivers. For example, if only one driver is
+        available, fb0, adding fbcon=map:1 tells fbcon not to take over the
+        console.
+
+        Later on, when you want to map the console the to the framebuffer
+        device, you can use the con2fbmap utility.
+
+fbcon=vc:<n1>-<n2>
+
+        This option tells fbcon to take over only a range of consoles as
+        specified by the values 'n1' and 'n2'. The rest of the consoles
+        outside the given range will still be controlled by the standard
+        console driver.
+
+        NOTE: For x86 machines, the standard console is the VGA console which
+        is typically located on the same video card.  Thus, the consoles that
+        are controlled by the VGA console will be garbled.
+
+fbcon=rotate:<n>
+
+        This option changes the orientation angle of the console display. The
+        value 'n' accepts the following:
+
+        0 - normal orientation (0 degree)
+        1 - clockwise orientation (90 degrees)
+        2 - upside down orientation (180 degrees)
+        3 - counterclockwise orientation (270 degrees)
+
+        The angle can be changed anytime afterwards by 'echoing' the same
+        numbers to any one of the 2 attributes found in
+        /sys/class/graphics/fbcon
+
+        rotate     - rotate the display of the active console
+        rotate_all - rotate the display of all consoles
+
+        Console rotation will only become available if Console Rotation
+        Support is compiled in your kernel.
+
+        NOTE: This is purely console rotation.  Any other applications that
+        use the framebuffer will remain at their 'normal'orientation.
+        Actually, the underlying fb driver is totally ignorant of console
+        rotation.
+
+
+So to have a slightly bigger console font use:
+
+MINI2440 # setenv bootargs ${bootargs} fbcon=font:VGA8x8
+MINI2440 # saveenv
+
+For more fonts check the kernel configuration file 
+/home/notroot/mini2440/oe/recipes/linux/linux-mini2440-2.6.32+git/defconfig_mini2440
+
+
+--------------------------------------------------------------------------------
+Memory Layout (64Mb RAM)
+--------------------------------------------------------------------------------
+
+Address space
+
+0000 0000 ------>  ---------------------   --
+                   |       UBOOT       |    |
+0004 0000 ------>  |-------------------|    |
+                   |     UBOOT ENV     |    |
+0006 0000 ------>  |-------------------|    |
+                   |    KERNEL IMG     |    |
+0056 0000 ------>  |-------------------|     \
+                   |      ROOTFS       |      ---- FLASH
+0004 0000 ------>  |-------------------|     /
+                   .                   .    |
+                   .                   .    |
+                   .                   .    |
+3000 0000 ------>  |-------------------|   --
+                   |                   |    |
+3000 0100 ------>  |-------------------|    |
+                   |  Kernel Params    |    |
+3000 8000 ------>  |-------------------|    |
+                   |     VMLINUZ       |    |
+3001 0000 ------>  |-------------------|    |
+                   .                   .    |
+                   .                   .     \
+                   .                   .      ---- SDRAM
+3200 0000 ------>  ---------------------     /
+                   |    Compressed     |    |
+                   |    kernel image   |    |
+                   |-------------------|    |
+                   .                   .    |
+                   .                   .    |
+                   .                   .    |
+33F8 0000 ------>  |-------------------|    |
+                   |       UBOOT       |    |
+3400 0000 ------>  |-------------------|   --
+                   .                   .
+                   .                   .
+                   .                   .
+FFFF FFFF ------>  ---------------------
+
+
+After reset, Uboot is loaded from flash (0x0000 0000) into RAM (0x33f8 0000).and 
+executed. Therefore, max size of u-boot is 512K bytes. Following, it will load 
+the kernel image from flash to RAM at 0x3200 0000 and analyze it and eventually 
+uncompress it if needed. Then, uboot will load the kernel to 0x3000 8000 and 
+make the PC register point to there (0x3000 8000 is the ENTRYPOINT). From now, 
+the protected-mode kernel code executes and takes care of everything.
+
+
+--------------------------------------------------------------------------------
+Memory Layout (128Mb RAM)
+--------------------------------------------------------------------------------
+
+>>> TODO
+
+--------------------------------------------------------------------------------
+Loading / flashing u-boot
+--------------------------------------------------------------------------------
+
+Nand flash is divided into pages and blocks. A page is a minimum write unit and 
+a block is the minimum erase unit. A block consists of multiple pages. This 
+geometry is dictated by the NAND flash manufacturer not the TI device.
+
+The 'small page' NAND devices typically have page size equal to 512 bytes and 
+have 32 pages per block (16K block). This is the case for Mini2440 64Mb.
+
+The 'large page' NAND devices have a 2K byte page size and 64 pages per block 
+(128K block). This is the case for Mini2440 128Mb.
+
+Note we use the 2K aligned one, since NAND write needs sizes that are padded to 
+2K bytes. We load it in the middle of the RAM for convenience.
+
+If this is not the first time you flash u-boot since the last "scrub" you'll 
+have to erase the u-boot partition, otherwise just skip the next command.
+
+MINI2440 # nand erase u-boot
+
+NAND erase: device 0 offset 0x0, size 0x40000
+Erasing at 0x20000 -- 100% complete.
+OK
+
+MINI2440 # 
+
+
+MINI2440 # tftp 30000000 u-boot.bin
+dm9000 i/o: 0x20000300, id: 0x90000a46
+DM9000: running in 16 bit mode
+MAC: 08:08:11:18:12:27
+TFTP from server 10.1.0.1; our IP address is 10.1.0.2
+Filename 'u-boot.bin'.
+Load address: 0x30000000
+Loading: checksum bad
+checksum bad
+checksum bad
+T T T
+TFTP error: 'File not found' (1)
+Starting again
+
+TFTP from server 10.1.0.1; our IP address is 10.1.0.2
+Filename 'u-boot.bin'.
+Load address: 0x30000000
+Loading: #################
+done
+Bytes transferred = 239616 (3a800 hex)
+
+As you can see if your tftp server is not yet running or the file is not there
+u-boot keeps trying until the server is up or the file is put in place.
+
+Notes to windows users. The tftp32 program will not let you pick up an
+interface that's not physically connected. On the other hand, u-boot will only
+initilize the ethernet device if an operation is in progress so start the tftp 
+request in u-boot first as illustrated. Then you can start the tftp32 server and
+choose the appropriate interface.
+
+The ".e" variation of "nand write" in u-boot will write the error-correction
+bytes, and skip any bad blocks in the way. Note that we don't need to erase the 
+NAND block here if it's been "scrubbed".
+
+MINI2440 # nand write.e ${fileaddr} 0 ${filesize}
+
+Watch out for the file size, it's the same value returned in the previous tftp 
+operation as "Bytes transferred". The output will be:
+
+NAND write: device 0 offset 0x0, size 0x3a800
+
+Writing data at 0x3a000 -- 100% complete.
+ 239616 bytes written: OK
+
+MINI2440 # 
+
+
+--------------------------------------------------------------------------------
+Flash a kernel image
+--------------------------------------------------------------------------------
+
+The process is similiar to the one used to flash u-boot itself except that we
+will be writing to a different flash offset (following the nand partition table 
+inspected before).
+
+Note that the image must fit into the available RAM and be correctly padded to 
+the flash page size.
+
+Now if this is not the first time you flash the kernel you'll need to clear the 
+partition first, otherwise you may skip the next command:
+
+MINI2440 # nand erase clean kernel
+NAND erase: device 0 offset 0x60000, size 0x500000
+Skipping bad block at  0x00440000
+Skipping bad block at  0x00480000
+Erasing at 0x540000 -- 100% complete. Cleanmarker written at 0x540000.
+OK
+
+MINI2440 # tftp 30000000 uImage.bin
+dm9000 i/o: 0x20000300, id: 0x90000a46
+DM9000: running in 16 bit mode
+MAC: 08:08:11:18:12:27
+TFTP from server 10.1.0.1; our IP address is 10.1.0.2
+Filename 'uImage.bin'.
+Load address: 0x30000000
+Loading: checksum bad
+checksum bad
+checksum bad
+T #################################################################
+         #################################################################
+         ############
+done
+Bytes transferred = 2070708 (1f98b4 hex)
+
+
+MINI2440 # nand write.e ${fileaddr} 0x60000 ${filesize}
+NAND write: device 0 offset 0x60000, size 0x1f98b4
+
+Writing data at 0x259800 -- 100% complete.
+ 2070708 bytes written: OK
+
+MINI2440 #
+
+--------------------------------------------------------------------------------
+Flash rootfs image
+--------------------------------------------------------------------------------
+The process is similiar to the one used to flash u-boot and the kernel image
+except that we will be writing to a different flash offset (following the nand 
+partition table inspected before)
+
+Note that the image must fit into the available RAM and be correctly padded to 
+the flash page size.
+
+Now if this is not the first time you flash the rootfs you'll need to clear the 
+partition first, otherwise you may skip the next command:
+
+MINI2440 # nand erase clean root
+NAND erase: device 0 offset 0x560000, size 0x7aa0000
+Skipping bad block at  0x00800000
+Skipping bad block at  0x00a00000
+Skipping bad block at  0x044c0000
+Skipping bad block at  0x069c0000
+Skipping bad block at  0x07f80000
+Skipping bad block at  0x07fa0000
+Skipping bad block at  0x07fc0000
+Skipping bad block at  0x07fe0000
+
+OK
+MINI2440 #
+
+
+MINI2440 # tftp 30000000 rootfs.jffs2
+dm9000 i/o: 0x20000300, id: 0x90000a46
+DM9000: running in 16 bit mode
+MAC: 08:08:11:18:12:27
+TFTP from server 10.1.0.1; our IP address is 10.1.0.2
+Filename 'rootfs.jffs2'.
+Load address: 0x30000000
+Loading: #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         #################################################################
+         ###########################################################
+done
+Bytes transferred = 29491200 (1c20000 hex)
+
+
+MINI2440 # nand write.e ${fileaddr} 0x560000 ${filesize}
+
+NAND write: device 0 offset 0x560000, size 0x1c20000
+
+Bad block at 0x800000 in erase block from 0x800000 will be skipped
+Bad block at 0xa00000 in erase block from 0xa00000 will be skipped
+Writing data at 0x21bf800 -- 100% complete.
+ 29491200 bytes written: OK
+
+MINI2440 # 
+
+
+--------------------------------------------------------------------------------
+Done
+--------------------------------------------------------------------------------
+There you go. Turn off the board. Switch the boot selector to initialize from
+NAND instead of NOR and turn on the board again.
+
+The first time you boot a real linux, you might hit several other problems, like 
+initializing the hardware clock
+
+The RTC chip might come with garbage in. If you see this:
+ s3c2410-rtc s3c2410-rtc: hctosys: invalid date/time
+ ...
+
+The Hardware Clock does not contain a valid time, so we cannot set the System
+Time from it. Use:
+
+root@mini2440:~# date -s "2010-06-22 02:38:30"
+root@mini2440:~# "hwclock -w" to force it's initialization 
+root@mini2440:~# reboot 
+
+
+*******************************************************************************
+Mini2440 via NFS
+*******************************************************************************
+
+-------------------------------------------------------------------------------
+NFS in Kubuntu 8.0.4
+-------------------------------------------------------------------------------
+
+$ sudo apt-get install nfs-kernel-server
+$ sudo mkdir /home/nfs
+$ sudo chmod 777 /home/nfs
+
+edit /etc/exports
+
+add the lines:
+
+/home/nfs 192.168.255.255/255.255.0.0(sync,rw,no_root_squash,no_subtree_check)
+/home/nfs 10.1.255.255/255.255.0.0(sync,rw,no_root_squash,no_subtree_check)
+
+$ sudo /etc/init.d/nfs-kernel-server restart
+
+Now unpack your image at /home/nfs. eg:
+
+$ sudo tar -vxzf /home/notroot/mini2440/build/deploy/glibc/images/mini2440/mini2440-erlang-qt4-image-mini2440.tar.gz -C /home/nfs
+
+-------------------------------------------------------------------------------
+Mini2440 nfs bootargs
+-------------------------------------------------------------------------------
+
+In u-boot:
+
+MINI2440 # setenv root_nfs /home/nfs
+MINI2440 # setenv serverip 10.1.0.3
+MINI2440 # setenv ipaddr 10.1.0.2
+MINI2440 # run ifconfig_static
+MINI2440 # run set_bootargs_nfs
+
+To make these changes persistent:
+
+MINI2440 # saveenv
+
+
+*******************************************************************************
+Mini2440 Linux First Configuration
+*******************************************************************************
+
+-------------------------------------------------------------------------------
+Touchscreen
+-------------------------------------------------------------------------------
+
+Run ts_calibrate to configure display before running dfbinfo.
+
+Verify that there is a symbolic link from touchscreen0 to event1
+mini2440:/dev/input# ls -l
+crw-r-----    1 root     root      13,  64 Mar  7 23:19 event0
+crw-r-----    1 root     root      13,  65 Mar  7 23:19 event1
+crw-r-----    1 root     root      13,  63 Mar  7 23:19 mice
+crw-r-----    1 root     root      13,  32 Mar  7 23:19 mouse0
+lrwxrwxrwx    1 root     root            6 Mar  7 23:19 touchscreen0 -> event1
+
+Run ts_test to check everything works
+
+Run dfbinfo
+
+For tslib to work correctly, the following env variable should be set:
+
+TSLIB_TSDEVICE=/dev/input/touchscreen0
+
+Other optional variables are:
+
+TSLIB_TSEVENTTYPE=INPUT
+TSLIB_FBDEVICE=/dev/fb0
+TSLIB_PLUGINDIR=/usr/lib/ts
+TSLIB_CONSOLEDEVICE=none
+TSLIB_CONFFILE=/etc/ts.conf
+TSLIB_CALIBFILE=/etc/pointercal
+
+All these variables should be configured by /etc/profile.d/tslib.sh
+
+-------------------------------------------------------------------------------
+QT4
+-------------------------------------------------------------------------------
+
+For QT4 applications to work correctly the following enviroment variable should
+be declared:
+
+export QWS_MOUSE_PROTO=Tslib:$TSLIB_TSDEVICE
+
+The following additional variables can also be declared:
+
+QWS_SIZE=240x320
+QWS_DISPLAY="Linuxfb:mmWidth120:mmHeight160:/dev/fb0"   # display driver plus font scaling
+
+All these variables should be configured by /etc/profile.d/qte.sh
+
+To run your qt4 application use:
+
+root@mini2440:~# my_qt_app -qws
+
+
+-------------------------------------------------------------------------------
+usbfs
+-------------------------------------------------------------------------------
+
+usbfs is deprecated and will not mount. Edit /etc/fstab:
+
+    * Change line:
+
+      usbfs                /proc/bus/usb        usbfs      defaults              0 0
+      to
+      # usbfs                /proc/bus/usb        usbfs      defaults              0 0
+
+
+-------------------------------------------------------------------------------
+ALSA
+-------------------------------------------------------------------------------
+
+alsatcl will complain with: 
+
+"Unable to open file '/usr/share/alsa/init/00main': No such file or directory."
+
+It's missing a state file and trying to fallback to a default file that does not
+exist. In order to fix it, execute alsamixer, setup the defaults you want, press
+escape, and then execute alsactl store.
+
+root@mini2440:~# alsamixer
+root@mini2440:~# alsactl store
+
+
+The alsa-utils is in separate ipk packages which can be installed according to 
+one's needs. aplay, arecord and speaker-test can be used to test if sound works.
+
+To play a test.wav try:
+
+$ aplay ./test.wav
+
+Just don't forget to check the mixer volume before the test.
+
+To record something from the external input try:
+
+$ arecord -D hw:S3C24XXUDA134X,0 -t wav -f cd --vumeter=stereo /home/test.wav -d 5
+
+The board comes with an attached microphone as well as an external line input. The
+appropriate input must be enabled using alsamixer. Change the "Input Mux" parameter 
+to 'analog1', 'analog2' or 'both'
+
+-------------------------------------------------------------------------------
+i2c modules
+-------------------------------------------------------------------------------
+
+The following error may appear during startup:
+
+FATAL: Module i2c_pxa not found.
+FATAL: Module i2c_dev not found.
+
+This happens because our init script tries to load i2c modules we don't have in
+our build system. Just disable the startup script:
+
+root@mini2440:~# update-rc.d -f i2c remove
+
+-------------------------------------------------------------------------------
+Bluetooth
+-------------------------------------------------------------------------------
+
+(Optional) Since our board doesn't come with bluetooth, we can disable the
+support for it:
+
+root@mini2440:~# update-rc.d -f bluetooth remove
+root@mini2440:~# update-rc.d -f blueprobe remove
+root@mini2440:~# rm /etc/modutils/hidp
+root@mini2440:~# rm /etc/modutils/rfcomm
+root@mini2440:~# update-modules
+
+-------------------------------------------------------------------------------
+ls colors
+-------------------------------------------------------------------------------
+
+The ls that's configured with the default buildroot is capable of outputting
+colorized display on an ANSI compatible terminal. To use this, use the command:
+
+ls --color=auto
+
+You can automate this by adding the following to your ~/.profile
+
+alias ls='ls --color=auto'
+
+The --color=auto mode causes the color to show up when outputting to a tty, but
+to be turned off when piping the output of ls to a program. Try the following
+options:
+
+ls --color=auto
+ls --color=auto | more
+ls --color=always
+ls --color=always | more
+ls --color=never
+ls --color=never | more
+
+Unfortunately, the colors aren't configurable.
+
+-------------------------------------------------------------------------------
+Networking
+-------------------------------------------------------------------------------
+
+To change network settings edit the file /etc/network/interfaces
+For the change to take effect restart networking by doing 
+
+root@mini2440:~# /etc/init.d/networking restart
+
+A DNS server can be configured in the file
+/etc/resolv.conf
+
+Local IP<->Name translations overriding a dns server can be included in the 
+file /etc/hosts
+
+-------------------------------------------------------------------------------
+TCP Keepalive
+-------------------------------------------------------------------------------
+From <http://tldp.org/HOWTO/TCP-Keepalive-HOWTO/overview.html>
+
+"The keepalive concept is very simple: when you set up a TCP connection, you
+associate a set of timers. Some of these timers deal with the keepalive
+procedure. When the keepalive timer reaches zero, you send your peer a keepalive
+probe packet with no data in it and the ACK flag turned on. You can do this
+because of the TCP/IP specifications, as a sort of duplicate ACK, and the remote
+endpoint will have no arguments, as TCP is a stream-oriented protocol. On the
+other hand, you will receive a reply from the remote host (which doesn't need to
+support keepalive at all, just TCP/IP), with no data and the ACK set.
+If you receive a reply to your keepalive probe, you can assert that the
+connection is still up and running without worrying about the user-level
+implementation. In fact, TCP permits you to handle a stream, not packets, and so
+a zero-length data packet is not dangerous for the user program.
+This procedure is useful because if the other peers lose their connection (for
+example by rebooting) you will notice that the connection is broken, even if you
+don't have traffic on it. If the keepalive probes are not replied to by your
+peer, you can assert that the connection cannot be considered valid and then
+take the correct action.
+(...)
+The procedures involving keepalive use three user-driven variables:
+
+tcp_keepalive_time
+
+    the interval between the last data packet sent (simple ACKs are not 
+    considered data) and the first keepalive probe; after the connection is 
+    marked to need keepalive, this counter is not used any further 
+
+tcp_keepalive_intvl
+
+    the interval between subsequential keepalive probes, regardless of what the 
+    connection has exchanged in the meantime 
+
+tcp_keepalive_probes
+
+    the number of unacknowledged probes to send before considering the 
+    connection dead and notifying the application layer 
+
+To access these variables using procfs one should do:
+
+# cat /proc/sys/net/ipv4/tcp_keepalive_time
+  7200
+
+# cat /proc/sys/net/ipv4/tcp_keepalive_intvl
+  75
+
+# cat /proc/sys/net/ipv4/tcp_keepalive_probes
+  9
+
+
+The first two parameters are expressed in seconds, and the last is the pure 
+number. This means that the keepalive routines wait for two hours (7200 secs) 
+before sending the first keepalive probe, and then resend it every 75 seconds. 
+If no ACK response is received for nine consecutive times, the connection is 
+marked as broken.
+
+Modifying this value is straightforward: you need to write new values into the 
+files. Suppose you decide to configure the host so that keepalive starts after 
+ten minutes of channel inactivity, and then send probes in intervals of one 
+minute. Because of the high instability of our network trunk and the low value 
+of the interval, suppose you also want to increase the number of probes to 20.
+
+Here's how we would change the settings:
+
+  # echo 600 > /proc/sys/net/ipv4/tcp_keepalive_time
+  # echo 60 > /proc/sys/net/ipv4/tcp_keepalive_intvl
+  # echo 20 > /proc/sys/net/ipv4/tcp_keepalive_probes
+
+ You can access the interface through the  sysctl(8) tool, specifying what you 
+ want to read or write.
+
+# sysctl \
+> net.ipv4.tcp_keepalive_time \
+> net.ipv4.tcp_keepalive_intvl \
+> net.ipv4.tcp_keepalive_probes
+net.ipv4.tcp_keepalive_time = 7200
+net.ipv4.tcp_keepalive_intvl = 75
+net.ipv4.tcp_keepalive_probes = 9
+
+
+Note that sysctl names are very close to procfs paths. Write is performed using 
+the -w switch of sysctl (8):
+
+# sysctl -w \
+> net.ipv4.tcp_keepalive_time=600 \
+> net.ipv4.tcp_keepalive_intvl=60 \
+> net.ipv4.tcp_keepalive_probes=20
+net.ipv4.tcp_keepalive_time = 600
+net.ipv4.tcp_keepalive_intvl = 60
+net.ipv4.tcp_keepalive_probes = 20
+
+
+Note that sysctl (8) doesn't use sysctl(2) syscall, but reads and writes
+directly in the procfs subtree, so you will need procfs enabled in the kernel
+and mounted in the filesystem, just as you would if you directly accessed the
+files within the procfs interface. Sysctl(8) is just a different way to do the
+same thing.
+
+There are several ways to reconfigure your system every time it boots up. First,
+remember that every Linux distribution has its own set of init scripts called by
+init  (8). The most common configurations include the /etc/rc.d/ directory, or
+the alternative, /etc/init.d/. In any case, you can set the parameters in any of
+the startup scripts, because keepalive rereads the values every time its
+procedures need them. So if you change the value of tcp_keepalive_intvl when the
+connection is still up, the kernel will use the new value going forward.
+There are three spots where the initialization commands should logically be
+placed: the first is where your network is configured, the second is the
+rc.local script, usually included in all distributions, which is known as the
+place where user configuration setups are done. The third place may already
+exist in your system. Referring back to the sysctl (8) tool, you can see that
+the -p switch loads settings from the /etc/sysctl.conf configuration file. In
+many cases your init script already performs the sysctl -p (you can "grep" it in
+the configuration directory for confirmation), and so you just have to add the
+lines in /etc/sysctl.conf to make them load at every boot. For more information
+about the syntax of sysctl.conf(5), refer to the manpage. 
+
+
+
+-------------------------------------------------------------------------------
+Fix LCD display going blank in text mode
+-------------------------------------------------------------------------------
+
+In text mode, after some minutes of no keyboard or mouse activity the lcd goes 
+blank and only turns on again when you hit a keyboard key, or gpio-key (if the
+gpio-keys driver is loaded) or move the mouse. With no keyboard or mouse
+attached, running the dfbinfo also restores the lcd status.
+
+This happens because the terminal is turning the lcd off. Changing the
+backlight led trigger prevents that:
+
+root@mini2440:~# echo "default-on" > /sys/class/leds/backlight/trigger
+
+But doesn't prevent the console from disappearing since this is a terminal
+feature. For this matter, the setterm utility should be used like this:
+
+root@mini2440:~#  setterm -blank 0 -powersave off > /dev/tty1
+
+where /dev/tty1 is the tty showing in the display. Note that setterm can not 
+only turn blanking on and off but can also set some other usefull attributes 
+such as the amount of time to go blank, among others. 
+
+Bad news is setterm is not available in busybox. In order to have setterm 
+available, you will need to include the util-linux package in the build image, 
+but since busybox already provides most of util-linux's funcionality it would be 
+a waste to say the least. As an alternative, you may send the control characters 
+to the terminal yourself with the following command:
+
+root@mini2440:~# echo -e '\33[9;0]\33[14;0]' > /dev/tty1
+
+Note that it must be /dev/tty1 or whaterver tty is being used by the lcd.
+Using /dev/console will not always work because it may point to the serial 
+console in use.
+
+Put this command in a start up script inside the /etc/rcS.d/ folder to make it
+permanent.
+
+-------------------------------------------------------------------------------
+More terminal configurations
+-------------------------------------------------------------------------------
+
+In text mode, the lcd will show a login prompt even with no keyboard. To disable
+that comment (put a "#" at the beginning of) the following line in /etc/inittab:
+
+1:2345:respawn:/sbin/getty 38400 tty1
+
+This will prevent the login prompt from showing. Note that /dev/tty1 can used
+inside a C program as any other tty (like a serial port for exemple) using the 
+termios interface. 
+
+Following startup, a cursor may appear blinking at some point in the screen. To 
+remove it use the setterm command:
+
+root@mini2440:~# setterm -cursor off > /dev/tty1
+
+or send the corresponding control characters directly to the terminal:
+
+root@mini2440:~# echo -e '\33[?25l' > /dev/tty1
+
+change the 'l' for an 'h' in the same sequence to turn the cursor on again.
+
+To clear the screen use:
+
+root@mini2440:~# echo -e '\33[2J' > /dev/tty1
+
+In a standard linux distro you can check all supported codes by making:
+
+$ man console_codes
+
+You may write messages to the tty as well:
+
+root@mini2440:~# echo -e "hello world" > /dev/tty1
+
+
+*******************************************************************************
+Installing Ipk Packages 
+*******************************************************************************
+
+There are few methods of adding software into rootfs. You can copy binaries but
+you can also go better way by using packages. 
+I know that this can be strange experience for some people (which are used to
+systems which generates only binaries) but in 
+OpenEmbedded world effect of software build is set of packages which can be used
+to generate final rootfs image.
+
+First thing to check is which package contains needed binary. It is easier if
+package name has binary name (like ‘alsa-utils-aplay’ 
+which contains ‘aplay’ command) but it is not always so easy. Hopefully
+OpenEmbedded generates ‘Packages.filelist’ file in ‘tmp/deploy/glibc/ipk/’ 
+subdirectories. If they are empty (common situation) they need to be recreated.
+
+To generate them user needs to remove ‘Packages*’ files from all directories and
+call bitbake package-index command. When command finishes 
+‘Packages.filelist’ files should contain all informations — for example
+‘update-inetd’ command line looks like this
+
+update-inetd netbase:armv6:./usr/sbin/update-inetd
+
+The format is simple:
+
+BINARY-NAME PACKAGE:ARCH:PATH-TO-BINARY
+
+So when package name is known we need to transfer package into device. This part
+depends on device so I will not elaborate on it.
+
+Installing package is simple: opkg install package.ipk. But copying single
+packages can result in frustration called ‘dependency hell’ 
+(package require another package which require another etc). To check which
+packages will be required the easiest way is 
+dpkg-deb -I package.ipk (as IPK packages are compatible with DEBs).
+
+Better way is to use repositories of packages — command simplify to opkg
+update;opkg install package (users of desktop Linux distributions 
+can compare it with apt-get or yum). If you built Ångström distribution then
+your rootfs already contains all informations needed to use packages 
+from repositories. For other distros user needs to define them by hand.
+
+Repository informations are stored in ‘/etc/opkg/*-feed.conf’ files. Format is
+simple:
+
+src/gz NAME URL
+
+Example:
+
+src/gz base
+http://www.angstrom-distribution.org/feeds/2008/ipk/glibc/armv5te/base
+
+Instead of ’src/gz’ also ’src’ can be used — it will fetch uncompressed
+‘Packages’ file instead of gzipped one.
+
+When repositories are defined installing software is easy: opkg update;opkg
+install package will fetch package and all it’s dependencies and then will
+install them into rootfs.
+
+
+********************************************************************************
+JFFS2
+********************************************************************************
+There's no such thing as a fsck.jffs2 and no need to it. Besides,
+jffs2 outputs several warnings and notices, most of them harmless. Check 
+FAQ in doc/jffs2 folder for clarification.
+
+
+*******************************************************************************
+Mounting JFFS2 images on your host computer
+*******************************************************************************
+
+The normal procedure would be to use what's known as a loop mount. However, this
+only works for filesystems which can be mounted on a block device, and jffs2
+isn't one of those. However, there is a device called mtdram which uses RAM to
+emulate a flash device well enough that a JFFS2 system can be mounted on it.
+
+The procedure (requires root accees to the linux host machine) is as follows:
+
+modprobe mtdcore
+modprobe jffs2
+modprobe mtdram
+modprobe mtdchar
+modprobe mtdblock
+dd if=image.jffs2 of=/dev/mtd0
+mount -t jffs2 /dev/mtdblock0 mnt
+
+You can now look at mnt and be seeing a copy of the jffs2 image. Note that
+changes to the image are happening in the RAM copy, not on your original image.
+
+MTD also comes with a tool called jffs2dump which can be used to examine jffs2
+images as well. 
+
+
+********************************************************************************
+Using devices
+********************************************************************************
+
+--------------------------------------------------------------------------------
+Onboard LEDs
+--------------------------------------------------------------------------------
+
+The system LEDs are registered under /sys/devices/platform/s3c24xxled.X, where X
+is the LED number.
+
+LEDs 1-4 are located on the system board and LED 5 is the backlight. To control
+the devices you can do the following:
+
+root@mini2440:~# cd /sys/devices/platform/s3c24xx_led.5/leds/backlight
+root@mini2440:~# echo 0 > brightness   #turns the backlight off
+root@mini2440:~# echo 255 > brightness #turns the backlight on
+
+You can also choose from one of the available triggers, for example:
+
+root@mini2440:~# cat trigger
+none nand-disk mmc0 timer heartbeat [backlight] gpio default-on
+
+root@mini2440:~# echo heartbeat > trigger
+
+Will make your backlight flash on and off like, well, a heartbeat!
+
+Unfortunately there is no PWM control to manage backlight brightness.
+The reason being that GPB1/TOUT1 seems to be disconnected in the the 3.5" LCD
+display. This would have been really nice, though.
+
+--------------------------------------------------------------------------------
+Onboard EEPROM
+--------------------------------------------------------------------------------
+
+A 256bytes eeprom is available:
+
+$ cd /sys/devices/platform/s3c2440-i2c/i2c-0/0-0050
+
+Data can be written by using the following command:
+
+# echo whatever you want > ./eeprom
+
+Then just do the following to read the memory:
+
+root@mini2440:~# cat eeprom
+
+For more details and guidelines on using sysfs refer to
+<kernel source>/Documentation/sysfs-rules.txt
+
+--------------------------------------------------------------------------------
+GPIO
+--------------------------------------------------------------------------------
+
+The GPIO control files are all contained in: /sys/class/gpio/
+
+root@mini2440:~# ls /sys/class/gpio
+export       gpiochip128  gpiochip192  gpiochip32   gpiochip64   unexport
+gpiochip0    gpiochip160  gpiochip224  gpiochip416  gpiochip96
+
+
+Initially all that is in this folder are other gpiochipN folders. There is one 
+of these for each "gpiochip" that provides gpio pins.
+
+In our case, each "gpiochip" is bound to a gpio register in the CPU. You can 
+find out which gpiochip folder is which by examinging the "label" file in each 
+one of those folders.
+
+root@mini2440:~# cat /sys/class/gpio/gpiochip192/label
+GPIOG
+
+To be able to use a GPIO directly, you must first export it to userspace. For 
+any gpios which have been exported for userspace access, you'll see a
+/sys/class/gpio/gpioN folder where N is the number of the gpio given by:
+
+N = <port number> * 32 + <io number>
+
+Valid Port numbers are:
+
+GPA: 0
+GPB: 1
+GPC: 2
+GPD: 3
+GPE: 4
+GPF: 5
+GPG: 6
+GPH: 7
+GPJ: 13
+
+So for example if you wanted to toggle pin 9 (GPF0) of the expansion header you 
+would use the value N = 5 * 32 + 0 = 160.
+
+If you wanted to toggle pin 10 (GPJ6) of the camera header you 
+would use the value N = 13 * 32 + 6 = 422.
+
+You can find out more about the GPIO sysfs device driver by reading through the
+kernel documentation found at <kernel source>/Documentation/gpio.txt in the
+kernel source tree. 
+
+Some times the kernel has already given you access to a gpio. If so you'll see
+the gpioN folders in /sys/class/gpio.
+
+If you don't have a folder like this already, you need to create it. 
+Once you've got the gpio number you want, you request it to the kernel by 
+writing the value to the export file like this:
+
+root@mini2440:~# echo 422 > /sys/class/gpio/export
+
+Once you've done this you'll see the folder /sys/class/gpio/gpio203/
+In this folder you'll have the attributes needed to control the gpio in the form
+of virtual files:
+
+root@mini2440:~# ls /sys/class/gpio/gpio422
+direction  power      subsystem  uevent     value
+
+
+"direction" ... reads as either "in" or "out".  This value may
+                normally be written.  Writing as "out" defaults to
+                initializing the value as low.  To ensure glitch free
+                operation, values "low" and "high" may be written to
+                configure the GPIO as an output with that initial value.
+
+                Note that this attribute *will not exist* if the kernel
+                doesn't support changing the direction of a GPIO, or
+                it was exported by kernel code that didn't explicitly
+                allow userspace to reconfigure this GPIO's direction.
+
+"value" ... reads as either 0 (low) or 1 (high).  If the GPIO
+            is configured as an output, this value may be written;
+            any nonzero value is treated as high.
+
+"edge" ... reads as either "none", "rising", "falling", or
+           "both". Write these strings to select the signal edge(s)
+           that will make poll(2) on the "value" file return.
+           This file exists only if the pin can be configured as an
+           interrupt generating input pin.
+
+If you don't need control of the gpio anymore, you can unexport it
+
+#: echo 203 > /sys/class/gpio/unexport
+
+
+--------------------------------------------------------------------------------
+Watchdog
+--------------------------------------------------------------------------------
+
+/dev/watchdog can be used by a process to start and feed the watchdog. 
+Refer to <kernel source>/Documentation/watchdog/watchdog-api.txt in the kernel sources
+for more information.
+
+
+--------------------------------------------------------------------------------
+Free /dev/ttySAC0 from console
+--------------------------------------------------------------------------------
+By default /dev/ttySAC0 is used for the u-boot status-messages, and the linux
+system-console.
+
+Setting an ENV var in u-boot named "silent" will make the u-boot phase quiet.
+Setting the "bootargs" value such as "console=null" will make Linux quiet
+too.
+
+Example: After the following commands in u-boot:
+
+MINI2440# setenv silent 1
+MINI2440# setenv bootargs_base=console=null noinitrd
+MINI2440# run set_bootargs_nand
+MINI2440# saveenv
+
+the whole booting-process is reduced to a couple of lines and a login prompt.
+
+Note, that u-boot will still wait several seconds (in our case 2 == bootdelay)
+for any keypress. The "Uncompressing Linux ..."-line is hardcoded into the 
+kernel and needs a patch to be removed.
+
+>>> TODO: check gumstix's kernel patch for this purpose
+
+The login prompt can easily be removed by commenting (put a "#" at the 
+beginning of) the following line in /etc/inittab:
+
+S:2345:respawn:/sbin/getty 115200 ttySAC0
+
+To undo the uboot-changes reset bootargs to its initial value, and remove the
+silent var ("setenv silent" without value).
+
+MINI2440# setenv silent
+MINI2440# setenv bootargs_base=console=ttySAC0,115200 noinitrd
+MINI2440# run set_bootargs_nand
+MINI2440# saveenv
+
+
+
+
+********************************************************************************
+Building a Hello World project using bitbake
+********************************************************************************
+
+This is going to be one of the simplest possible recipes: all code is included
+and there's only one file to compile and one readme file. While this isn't all 
+that common, it's a useful example because it doesn't depend on any of the 
+helper classes which can sometimes hide a lot of what is going on.
+
+First we'll create the myhelloworld.c file and a readme file. We'll place this
+in the files subdirectory, which is one of the places that is searched for
+file:// URIs:
+
+$ mkdir -p recipes/myhelloworld/files
+$ cat > recipes/myhelloworld/files/myhelloworld.c
+#include <stdio.h>
+
+int main(int argc, char** argv)
+{
+        printf("Hello world!\n");
+        return 0;
+}
+^D
+$ cat > recipes/myhelloworld/files/README.txt
+Readme file for myhelloworld.
+^D
+
+Now we have a directory for our recipe, recipes/myhelloworld, and we've created
+a files subdirectory in there to store our local files. We've created two local
+files, 
+the C source code for our helloworld program and a readme file. Now we need to
+create the bitbake recipe.
+
+First we need the header section, which will contain a description of the
+package and the release number. We'll leave the other header variables out for
+now:
+
+DESCRIPTION = "My hello world program"
+PR = "r0"
+
+Next we need to tell it which files we want to be included in the recipe, which
+we do via file:// URIs and the SRC_URI variable:
+
+SRC_URI = "file://myhelloworld.c \
+           file://README.txt"
+
+Note the use of the \ to continue a file and the use of file:// local URIs,
+rather than other types such as http://.
+
+Now we need to provide a compile task which tells bitbake how to compile this
+program. We do this by defining a do_compile function in the recipe and
+providing 
+the appropriate commands:
+
+do_compile() {
+        ${CC} ${CFLAGS} ${LDFLAGS} ${WORKDIR}/myhelloworld.c -o myhelloworld
+}
+
+Note the:
+
+    * use of the pre-defined compiler variables, ${CC}, ${CFLAGS} and
+${LDFLAGS}. These are set up automatically to contain the settings required to 
+      cross-compile the program for the target.
+    * use of ${WORKDIR} to find the source file. As mentioned previously all
+files are copied into the working directory and can be referenced via 
+      the ${WORKDIR} variable.
+
+And finally we want to install the program and readme file into the destination
+directory so that it'll be packaged up correctly. This is done via the 
+install task, so we need to define a do_install function in the recipe to
+describe how to install the package:
+
+do_install() {
+        install -m 0755 -d ${D}${bindir} ${D}${docdir}/myhelloworld
+        install -m 0644 ${S}/myhelloworld ${D}${bindir}
+        install -m 0644 ${WORKDIR}/README.txt ${D}${docdir}/myhelloworld
+}
+
+Note:
+
+    * the use of the install command to create directories and install the 
+      files, not cp.
+    * the way directories are created before we attempt to install any files 
+      into them. The install command takes care of any subdirectories that are 
+      missing, so we only need to create the full path to the directory - no 
+      need to create the subdirectories.
+    * the way we install everything into the destination directory via the use 
+      of the ${D} variable.
+    * the way we use variables to refer to the target directories, such as 
+      ${bindir} and ${docdir}.
+    * the use of ${WORKDIR} to get access to the README.txt file, which was 
+      provided via a file:// URI.
+
+We'll consider this release 0 and version 0.1 of a program called helloworld. So
+we'll name the recipe myhelloworld_0.1.bb:
+
+$ cat > recipes/myhelloworld/myhelloworld_0.1.bb
+DESCRIPTION = "Hello world program"
+PR = "r0"
+
+SRC_URI = "file://myhelloworld.c \
+           file://README.txt"
+
+do_compile() {
+        ${CC} ${CFLAGS} ${LDFLAGS} ${WORKDIR}/myhelloworld.c -o myhelloworld
+}
+
+do_install() {
+        install -m 0755 -d ${D}${bindir} ${D}${docdir}/myhelloworld
+        install -m 0644 ${S}/myhelloworld ${D}${bindir}
+        install -m 0644 ${WORKDIR}/README.txt ${D}${docdir}/myhelloworld
+}
+^D
+
+Now we are ready to build our package, hopefully it'll all work since it's such
+a simple example:
+
+$ bitbake -b recipes/myhelloworld/myhelloworld_0.1.bb
+
+It the package was successfully built, the output consists of two .ipkg files,
+which are ready to be installed on the target. 
+One contains the binary and the other contains the readme file:
+
+One of the areas in which OpenEmbedded helps you out is by setting various
+environment variables, such as CC  and PATH etc, to values suitable for
+cross-compiling. 
+If you wish to manually run configure scripts and compile files during
+development it would be nice to have all those values set for you. This is what
+devshell 
+does - it provides you with an interactive shell with all the appropriate
+variables set for cross-compiling.
+
+Devshell via inherit is the newer method of obtaining a devshell and is the
+recommended way for most users now. The newer method requires that the devshell
+class be added to your 
+configuration by inheriting it. This is usually done in your local.conf or your
+distributions conf file:
+
+INHERIT += "devshell"
+
+With the inclusion of this class you'll find that devshell is added as a new
+task that you can use on recipes:
+
+To bring up the devshell you call bitbake on a recipe and ask it for the
+devshell task:
+$ bitbake -b recipes/myhelloworld/myhelloworld_0.1.bb -c devshell
+
+Now, if your distro does not come with gnome-terminal the last command will
+inevitably fail.
+We can fix this by setting the following variables in our local.conf.
+
+TERMCMD = "${KONSOLE_TERMCMD}"
+TERMCMDRUN = "${KONSOLE_TERMCMDRUN}"
+
+# Some common terminal programs to choose from
+GNOME_TERMCMD = 'gnome-terminal --disable-factory -t "$TERMWINDOWTITLE"'
+GNOME_TERMCMDRUN = '${GNOME_TERMCMD} -x $SHELLCMDS'
+SCREEN_TERMCMD = 'screen -D -m -t "$TERMWINDOWTITLE"'
+SCREEN_TERMCMDRUN = '${SCREEN_TERMCMD} $SHELLCMDS'
+XTERM_TERMCMD = 'xterm -T "$TERMWINDOWTITLE"'
+XTERM_TERMCMDRUN = '${XTERM_TERMCMD} -e $SHELLCMDS'
+KONSOLE_TERMCMD = 'konsole -T "$TERMWINDOWTITLE"'
+KONSOLE_TERMCMDRUN = '${KONSOLE_TERMCMD} -e $SHELLCMDS'
+
+In this example we chose to use kde's default terminal
+
+
+********************************************************************************
+Building a qt4 project using bitbake
+********************************************************************************
+
+First, make sure you have qt creator installed. If not execute the installer
+resources/qt.nokia.com/qt-creator-linux-x86-opensource-2.0.0.bin. 
+It will install qt creator in your home directory. Just click next and you're 
+good.
+
+
+>>> TODO: create and example project
+
+
+********************************************************************************
+Building an erlang project using bitbake
+********************************************************************************
+
+>>> TODO: organize this
+
+In the mini2440, erlang is installed under /usr/lib/erlang/
+
+The shell script /usr/lib/erlang/bin/start is an example of how to start
+an erlang session in an embedded system and may be used as a reference.
+An init script should call /usr/lib/erlang/bin/start for instance.
+
+The start script calls run_erl which is a wrapper that provides logging of 
+output from the run-time system to file. It also provides a simple mechanism 
+for attaching to the Erlang shell (see to_erl). In its turn, run_erl calls 
+start_erl which starts the erlang emulator and sets -boot and -config parameters.
+It should only be used at an embedded target system. The start_erl shell script 
+should normally not be altered by the user.
+
+The start script expects as a parameter the start_erl.data file path.
+It defaults to $RELDIR/start_erl.data if not provided. The start_erl.data
+constains the run-time system version ("5.7.5") and release version ("1.0") that
+will be executed. 
+
+According to the start script the logs generated by run_erl should go into
+$ROOTDIR/log so this folder must exist. Remember to make 
+mkdir -p $ROOTDIR/log (maybe put in the start script itself?)
+
+To install a packaged release, we first need to copy the tar.gz package we 
+created earlier into the $ROOTDIR/releases directory. $ROOTDIR can be determined 
+by running code:root_dir(). Next, start up and Erlang shell and make sure the 
+sasl application is started so we can use the release_handler module. Also, make 
+sure the shell is running with valid permissions to make changes to the $ROOTDIR 
+directory. This may require running erl with sudo.
+
+3> release_handler:unpack_release("example").
+{ok,"1"} 
+
+To remove a release:
+
+4> release_handler:remove_release("1.0").
+ok
+
+The unpack_release method does just what it says. It unpacks the package file, 
+copying the libs to the code:lib_dir() and created a proper release directory
+
+Alternatively you can start the release application with a single command:
+erl -boot $ROOT/releases/1.0/start
+
+>>> TODO: document necessary modifications to /usr/lib/erlang/bin/start (adding erl 
+      options)
+
+>>> TODO: document current use of /etc/init.d/erlang and /etc/erlang.conf and 
+      necessary link /etc/rc3.d/S75erlang 
+      (can automate creation using update-rc ?)
+
+>>> TODO: document current use of -heart and the environment variables
+
+      export HEART_COMMAND=/sbin/reboot
+      export HEART_BEAT_BOOT_DELAY=5
+
+      which should be defined in /usr/lib/erlang/bin/start
+
+If the system should be rebooted because of missing heart-beats, or a terminated 
+Erlang runtime system, the environment variable HEART_COMMAND has to be set 
+before the system is started. If this variable is not set, a warning text will 
+be printed but the system will not reboot. However, if the hardware watchdog is
+used, it will trigger a reboot HEART_BEAT_BOOT_DELAY  seconds later nevertheless
+(default is 60).
+
+To reboot on the WINDOWS platform HEART_COMMAND can be set to heart -shutdown
+(included in the Erlang delivery) or of course to any other suitable program
+which can activate a reboot.
+
+The hardware watchdog will not be started under Solaris if the environment
+variable HW_WD_DISABLE is set.
+
+The HEART_BEAT_TIMEOUT and HEART_BEAT_BOOT_DELAY environment variables can be
+used to configure the heart timeouts, they can be set in the operating system
+shell before Erlang is started or be specified at the command line:
+
+% erl -heart -env HEART_BEAT_TIMEOUT 30 ...
+
+The value (in seconds) must be in the range 10 < X <= 65535.
+
+It should be noted that if the system clock is adjusted with more than
+HEART_BEAT_TIMEOUT seconds, heart will timeout and try to reboot the system.
+This can happen, for example, if the system clock is adjusted automatically by
+use of NTP (Network Time Protocol).
+
+
+
+
+********************************************************************************
+TODO list
+********************************************************************************
+
+*** PENDING: Update Qt4.5.0 to 4.5.3
+
+*** PENDING: ADC channels
+
+*** PENDING: Configurable buzzer frequency and volume
+
+*** PENDING: CMOS Camera
+
+*** PENDING: How to use CON5 (expansion system bus)
+
+*** PENDING: Split erlang-libs into more packages, move /usr/lib/erlang/usr/* to
+             erlang-dev package
+
+
+
+ADC
+----------------------------
+It's possible to patch the files adc.c and s3c2410-ts.c to share the IRQ_ADC,
+but the touchscreen performance becomes awful! 
+TODO: check if it's the excessive message printing in adc.c or if it's the adc.c
+sampling that imposes a delay
+TODO: how to probe the ADC driver for ADC1/2/3 values?
+TODO: check newer kernel version for updates (2.6.34?)
+
+
+PWM/Buzzer
+--------------------
+TODO: check this maybe there's a better way (see ep93xx pwm implementation) also
+kernel 2.6.35 has a new board (rx1975) which uses the PWM in TOUT1 as backlight
+and 
+may serve as a model
+
+Also, to include PWM support just copy the "drivers/char/mini2440_pwm.c" from
+friendlyarm.net 2.6.32 kernel to your kernel source. 
+Add the line "obj-$(CONFIG_MINI2440_BUZZER) += mini2440_pwm.o" on
+"drivers/char/Makefile" 
+and finally, add the line "CONFIG_MINI2440_BUZZER=y" on "Character devices"
+session in your kernel ".config" file. 
+
+
+
+
+
+
