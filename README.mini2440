@@ -2119,24 +2119,23 @@ a simple example:
 
 $ bitbake -b recipes/myhelloworld/myhelloworld_0.1.bb
 
-It the package was successfully built, the output consists of two .ipkg files,
-which are ready to be installed on the target. 
-One contains the binary and the other contains the readme file:
+If the package was successfully built, the output will consist of two .ipkg files,
+ready to be installed on the target. One contains the binary and the other contains
+the readme file.
 
 One of the areas in which OpenEmbedded helps you out is by setting various
 environment variables, such as CC  and PATH etc, to values suitable for
 cross-compiling. 
+
 If you wish to manually run configure scripts and compile files during
 development it would be nice to have all those values set for you. This is what
-devshell 
-does - it provides you with an interactive shell with all the appropriate
+devshell does - it provides you with an interactive shell with all the appropriate
 variables set for cross-compiling.
 
 Devshell via inherit is the newer method of obtaining a devshell and is the
 recommended way for most users now. The newer method requires that the devshell
-class be added to your 
-configuration by inheriting it. This is usually done in your local.conf or your
-distributions conf file:
+class be added to your configuration by inheriting it. This is usually done in 
+your local.conf or your distributions conf file:
 
 INHERIT += "devshell"
 
@@ -2145,10 +2144,12 @@ task that you can use on recipes:
 
 To bring up the devshell you call bitbake on a recipe and ask it for the
 devshell task:
+
 $ bitbake -b recipes/myhelloworld/myhelloworld_0.1.bb -c devshell
 
 Now, if your distro does not come with gnome-terminal the last command will
 inevitably fail.
+
 We can fix this by setting the following variables in our local.conf.
 
 TERMCMD = "${KONSOLE_TERMCMD}"
@@ -2165,6 +2166,23 @@ KONSOLE_TERMCMD = 'konsole -T "$TERMWINDOWTITLE"'
 KONSOLE_TERMCMDRUN = '${KONSOLE_TERMCMD} -e $SHELLCMDS'
 
 In this example we chose to use kde's default terminal
+
+--------------------------------------------------------------------------------
+devshell addon
+--------------------------------------------------------------------------------
+The devshell addon was the original method that was used to create a devshell.
+
+It requires no changes to your configuration, instead you simply build the devshell 
+recipe:
+
+$ bitbake devshell
+
+and then manually startup the shell. Once in the shell you'll usually want to change 
+into the working directory for the recipe you are working on:
+
+$ ~/mini2440/build/deploy/glibc/addons/arm-angstrom-linux-gnueabi-angstrom-mini2440-devshell
+bash: alias: `./configure': invalid alias name
+[OE::arm-angstrom-linux-gnueabi-angstrom-mini2440]:~/mini2440/oe/recipes/odile$ 
 
 
 ********************************************************************************
