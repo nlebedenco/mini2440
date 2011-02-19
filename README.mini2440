@@ -154,6 +154,33 @@ Now we should create our build and sources directories.
 $ mkdir ~/mini2440/sources
 $ mkdir ~/mini2440/build
 
+
+--------------------------------------------------------------------------------
+Default pull
+--------------------------------------------------------------------------------
+
+The canonical form of git pull is 
+
+$ git pull <remote> <branch>
+
+
+But if you're working on master and will have all your pulls against origin
+you can use:
+
+$ git config branch.master.remote origin
+$ git config branch.master.merge refs/heads/master
+
+This tells Git 2 things:
+
+   1. When you're on the master branch, the default remote is origin.
+   2. When using git pull on the master branch, with no remote and branch specified, 
+      use the default remote (origin) and merge in the changes from the master branch.
+
+And from now on the reduced git pull form can be used as in:
+
+$ git pull
+
+
 --------------------------------------------------------------------------------
 Local.conf
 --------------------------------------------------------------------------------
